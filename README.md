@@ -234,6 +234,8 @@ After connecting a port, use the topbar diagnostics:
 
 Important TX16S note: a USB connection to the radio does not automatically guarantee a MAVLink byte stream. Depending on EdgeTX/ELRS setup, the radio may expose joystick, storage, serial passthrough, CRSF telemetry, or no MAVLink stream at all. For this app, the selected port must output MAVLink v1/v2 bytes.
 
+The bottom map overlay includes an `Activity Log` panel. Open it while testing a radio connection to see port scans, connection attempts, raw-byte warnings, MAVLink parser warnings, and serial errors without leaving the app.
+
 ## API
 
 - `GET /api/ports` lists serial ports with path and optional metadata such as manufacturer, friendly name, VID/PID, serial number, PNP ID, and location ID.

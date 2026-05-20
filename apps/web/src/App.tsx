@@ -7,6 +7,7 @@ import { MapPanel } from "./components/MapPanel";
 import { TelemetrySidebar } from "./components/TelemetrySidebar";
 import { Topbar } from "./components/Topbar";
 import { VideoPanel } from "./components/VideoPanel";
+import { ActivityLogPanel } from "./components/ActivityLogPanel";
 
 export function App() {
   const {
@@ -14,6 +15,7 @@ export function App() {
     status,
     loggingStatus,
     ports,
+    logs,
     error,
     wsConnected,
     runtimeMode,
@@ -22,7 +24,8 @@ export function App() {
     disconnect,
     resetSession,
     startLogging,
-    stopLogging
+    stopLogging,
+    clearLogs
   } = useTelemetry();
 
   const [home, setHome] = useState<Coordinate | null>(null);
@@ -67,6 +70,7 @@ export function App() {
       <div className="relative flex min-h-0 flex-1">
         <TelemetrySidebar telemetry={telemetry} distanceFromHome={distanceFromHome} alerts={alerts} />
         <MapPanel telemetry={telemetry} coordinate={coordinate} home={home} />
+        <ActivityLogPanel logs={logs} onClear={clearLogs} />
         <VideoPanel />
 
         {error && (

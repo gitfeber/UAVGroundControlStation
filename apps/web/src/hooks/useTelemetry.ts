@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   BackendStatus,
   ConnectRequest,
@@ -28,6 +28,13 @@ const initialLoggingStatus: LoggingStatus = {
 
 type ServerMessage = TelemetryEnvelope | StatusEnvelope;
 type RuntimeMode = "web" | "desktop";
+
+export interface ActivityLogEntry {
+  id: number;
+  time: number;
+  level: "info" | "warning" | "error" | "success";
+  message: string;
+}
 
 function websocketUrl(): string {
   if (import.meta.env.VITE_WS_URL) {
@@ -67,16 +74,45 @@ export function useTelemetry() {
   const [status, setStatus] = useState<BackendStatus>(initialStatus);
   const [loggingStatus, setLoggingStatus] = useState<LoggingStatus>(initialLoggingStatus);
   const [ports, setPorts] = useState<SerialPortInfo[]>([]);
+  const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
+  const statusRef = useRef(status);
+  const lastStatusRef = useRef(status);
+  const activeConnectionRef = useRef<{ path: string; baudRate: number; startedAt: number } | null>(null);
+  const warningStateRef = useRef({ noRawBytes: false, noMavlinkPackets: false });
+  const nextLogIdRef = useRef(1);
+
+  const addLog = useCallback((level: ActivityLogEntry["level"], message: string) => {
+    const entry: ActivityLogEntry = {
+      id: nextLogIdRef.current++,
+      time: Date.now(),
+      level,
+      message
+    };
+
+    setLogs((current) => [entry, ...current].slice(0, 200));
+  }, []);
+
+  const clearLogs = useCallback(() => {
+    setLogs([]);
+  }, []);
 
   const refreshPorts = useCallback(async () => {
-    if (mode === "desktop") {
-      setPorts(await invokeTauri<SerialPortInfo[]>("list_ports"));
-    } else {
-      setPorts(await requestJson<SerialPortInfo[]>("/api/ports"));
+    try {
+      const nextPorts =
+        mode === "desktop"
+          ? await invokeTauri<SerialPortInfo[]>("list_ports")
+          : await requestJson<SerialPortInfo[]>("/api/ports");
+
+      setPorts(nextPorts);
+      addLog(nextPorts.length > 0 ? "info" : "warning", `Port scan found ${nextPorts.length} device-backed serial port${nextPorts.length === 1 ? "" : "s"}.`);
+    } catch (cause: unknown) {
+      const message = cause instanceof Error ? cause.message : "Unable to load ports.";
+      setError(message);
+      addLog("error", `Port scan failed: ${message}`);
     }
-  }, [mode]);
+  }, [addLog, mode]);
 
   const refreshStatus = useCallback(async () => {
     if (mode === "desktop") {
@@ -90,17 +126,34 @@ export function useTelemetry() {
 
   const connect = useCallback(async (request: ConnectRequest) => {
     setError(null);
-    if (mode === "desktop") {
-      setStatus(await invokeTauri<BackendStatus>("connect", { request }));
-    } else {
-      setStatus(
-        await requestJson<BackendStatus>("/api/connect", {
-          method: "POST",
-          body: JSON.stringify(request)
-        })
-      );
+    activeConnectionRef.current = {
+      path: request.path,
+      baudRate: request.baudRate ?? 460800,
+      startedAt: Date.now()
+    };
+    warningStateRef.current = { noRawBytes: false, noMavlinkPackets: false };
+    addLog("info", `Opening ${request.path} at ${request.baudRate ?? 460800} baud.`);
+
+    try {
+      if (mode === "desktop") {
+        setStatus(await invokeTauri<BackendStatus>("connect", { request }));
+      } else {
+        setStatus(
+          await requestJson<BackendStatus>("/api/connect", {
+            method: "POST",
+            body: JSON.stringify(request)
+          })
+        );
+      }
+      addLog("success", `Serial port opened: ${request.path}. Waiting for MAVLink bytes.`);
+    } catch (cause: unknown) {
+      const message = cause instanceof Error ? cause.message : "Unable to connect serial port.";
+      activeConnectionRef.current = null;
+      setError(message);
+      addLog("error", `Connect failed: ${message}`);
+      throw cause;
     }
-  }, [mode]);
+  }, [addLog, mode]);
 
   const disconnect = useCallback(async () => {
     setError(null);
@@ -109,7 +162,9 @@ export function useTelemetry() {
     } else {
       setStatus(await requestJson<BackendStatus>("/api/disconnect", { method: "POST" }));
     }
-  }, [mode]);
+    addLog("info", "Serial port disconnected.");
+    activeConnectionRef.current = null;
+  }, [addLog, mode]);
 
   const resetSession = useCallback(async () => {
     if (mode === "desktop") {
@@ -117,7 +172,9 @@ export function useTelemetry() {
     } else {
       setTelemetry(await requestJson<TelemetryState>("/api/reset", { method: "POST" }));
     }
-  }, [mode]);
+    warningStateRef.current = { noRawBytes: false, noMavlinkPackets: false };
+    addLog("info", "Telemetry session reset.");
+  }, [addLog, mode]);
 
   const startLogging = useCallback(async () => {
     if (mode === "desktop") {
@@ -125,7 +182,8 @@ export function useTelemetry() {
     } else {
       setLoggingStatus(await requestJson<LoggingStatus>("/api/logging/start", { method: "POST" }));
     }
-  }, [mode]);
+    addLog("success", "Telemetry JSONL logging started.");
+  }, [addLog, mode]);
 
   const stopLogging = useCallback(async () => {
     if (mode === "desktop") {
@@ -133,12 +191,75 @@ export function useTelemetry() {
     } else {
       setLoggingStatus(await requestJson<LoggingStatus>("/api/logging/stop", { method: "POST" }));
     }
-  }, [mode]);
+    addLog("info", "Telemetry JSONL logging stopped.");
+  }, [addLog, mode]);
 
   useEffect(() => {
-    refreshPorts().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Unable to load ports."));
+    addLog("info", `Runtime initialized in ${mode === "desktop" ? "Tauri desktop" : "browser"} mode.`);
+    refreshPorts().catch(() => undefined);
     refreshStatus().catch(() => undefined);
-  }, [refreshPorts, refreshStatus]);
+  }, [addLog, mode, refreshPorts, refreshStatus]);
+
+  useEffect(() => {
+    statusRef.current = status;
+    const previous = lastStatusRef.current;
+
+    if (!previous.serialConnected && status.serialConnected) {
+      addLog("success", "Serial connection is active.");
+    }
+
+    if (previous.serialConnected && !status.serialConnected) {
+      addLog("warning", "Serial connection closed.");
+    }
+
+    if ((previous.rawBytes ?? 0) === 0 && (status.rawBytes ?? 0) > 0) {
+      addLog("success", `Raw serial bytes detected (${status.rawBytes?.toLocaleString()}B).`);
+    }
+
+    if (previous.mavlinkPackets === 0 && status.mavlinkPackets > 0) {
+      addLog("success", `MAVLink packets detected (${status.mavlinkPackets.toLocaleString()}).`);
+    }
+
+    if ((status.parserErrors ?? 0) > (previous.parserErrors ?? 0)) {
+      addLog("warning", `Parser errors increased to ${status.parserErrors}. Check baud rate or protocol.`);
+    }
+
+    if (status.lastSerialError && status.lastSerialError !== previous.lastSerialError) {
+      addLog("error", `Serial error: ${status.lastSerialError}`);
+    }
+
+    lastStatusRef.current = status;
+  }, [addLog, status]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const currentStatus = statusRef.current;
+      const connection = activeConnectionRef.current;
+      if (!connection || !currentStatus.serialConnected) return;
+
+      const elapsedMs = Date.now() - connection.startedAt;
+      const rawBytes = currentStatus.rawBytes ?? 0;
+      const packets = currentStatus.mavlinkPackets;
+
+      if (elapsedMs > 3000 && rawBytes === 0 && !warningStateRef.current.noRawBytes) {
+        warningStateRef.current.noRawBytes = true;
+        addLog(
+          "warning",
+          `No serial bytes after 3s on ${connection.path}. Check TX16S USB mode, cable, driver, selected COM port, and whether telemetry is enabled.`
+        );
+      }
+
+      if (elapsedMs > 5000 && rawBytes > 0 && packets === 0 && !warningStateRef.current.noMavlinkPackets) {
+        warningStateRef.current.noMavlinkPackets = true;
+        addLog(
+          "warning",
+          `Serial bytes are arriving on ${connection.path}, but no MAVLink packets were parsed. Try 460800, 115200, or 57600 baud, and verify the port outputs MAVLink v1/v2 rather than joystick/storage/CRSF data.`
+        );
+      }
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [addLog]);
 
   useEffect(() => {
     if (mode === "desktop") {
@@ -236,6 +357,7 @@ export function useTelemetry() {
       status,
       loggingStatus,
       ports,
+      logs,
       error,
       wsConnected,
       runtimeMode: mode,
@@ -244,13 +366,15 @@ export function useTelemetry() {
       disconnect,
       resetSession,
       startLogging,
-      stopLogging
+      stopLogging,
+      clearLogs
     }),
     [
       telemetry,
       status,
       loggingStatus,
       ports,
+      logs,
       error,
       wsConnected,
       mode,
@@ -259,7 +383,8 @@ export function useTelemetry() {
       disconnect,
       resetSession,
       startLogging,
-      stopLogging
+      stopLogging,
+      clearLogs
     ]
   );
 }
