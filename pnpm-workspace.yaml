@@ -1,0 +1,6 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+allowBuilds:
+  '@serialport/bindings-cpp': false
+  esbuild: false

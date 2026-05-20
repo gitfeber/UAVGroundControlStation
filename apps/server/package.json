@@ -1,0 +1,26 @@
+{
+  "name": "@uav-ground-control-station/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "latest",
+    "@fastify/websocket": "latest",
+    "@uav-ground-control-station/shared": "workspace:*",
+    "fastify": "latest",
+    "node-mavlink": "latest",
+    "serialport": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "tsx": "latest"
+  }
+}

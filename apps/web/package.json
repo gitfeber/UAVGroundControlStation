@@ -1,0 +1,30 @@
+{
+  "name": "@uav-ground-control-station/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "tsc -p tsconfig.json && vite build",
+    "lint": "eslint src --ext .ts,.tsx",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "preview": "vite preview --host 0.0.0.0 --port 5173"
+  },
+  "dependencies": {
+    "@uav-ground-control-station/shared": "workspace:*",
+    "@vitejs/plugin-react": "latest",
+    "autoprefixer": "latest",
+    "maplibre-gl": "latest",
+    "postcss": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "tailwindcss": "latest",
+    "vite": "latest"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "latest",
+    "@types/geojson": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest"
+  }
+}
