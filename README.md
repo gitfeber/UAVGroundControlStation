@@ -36,6 +36,88 @@ logs/            Optional local JSONL flight logs
 
 ## Setup
 
+### Windows PowerShell First-Time Setup
+
+Install Node.js on Windows first. Node.js 22 LTS is recommended.
+
+If `node`, `npm`, and `corepack` are not recognized in PowerShell, install Node.js with `winget`:
+
+```powershell
+winget install OpenJS.NodeJS.LTS
+```
+
+Close PowerShell completely, open a new PowerShell window, and verify:
+
+```powershell
+node --version
+npm --version
+```
+
+Then open a new PowerShell window in the repository and enable pnpm:
+
+```powershell
+corepack enable
+corepack prepare pnpm@10.33.4 --activate
+pnpm --version
+```
+
+If `corepack` is not available, install pnpm with npm:
+
+```powershell
+npm install -g pnpm@10
+pnpm --version
+```
+
+If PowerShell blocks `npm.ps1` because it is not signed, use the command shim explicitly:
+
+```powershell
+& "C:\Program Files\nodejs\npm.cmd" --version
+& "C:\Program Files\nodejs\npm.cmd" install -g pnpm@10.33.4
+```
+
+If `pnpm` is still not recognized after the global install, the npm global binary folder is not in the current PowerShell `PATH`. Use the generated command shim directly:
+
+```powershell
+& "$env:APPDATA\npm\pnpm.cmd" --version
+& "$env:APPDATA\npm\pnpm.cmd" install
+& "$env:APPDATA\npm\pnpm.cmd" build:desktop
+```
+
+If `pnpm install` fails with `EACCES` inside `node_modules` after you previously installed dependencies from WSL, remove the WSL-created install tree and reinstall from Windows:
+
+```powershell
+cmd /c rmdir /s /q node_modules
+cmd /c rmdir /s /q apps\server\node_modules
+cmd /c rmdir /s /q apps\web\node_modules
+cmd /c rmdir /s /q apps\desktop\node_modules
+cmd /c rmdir /s /q packages\shared\node_modules
+& "$env:APPDATA\npm\pnpm.cmd" install --force
+```
+
+It is best to use one host environment per install tree. For Windows desktop hardware testing, install and build from Windows PowerShell. If you later switch back to WSL-only development, reinstall dependencies from WSL.
+
+To make `pnpm` available by name in new PowerShell windows, add the npm global binary folder to the user `PATH`:
+
+```powershell
+[Environment]::SetEnvironmentVariable(
+  "Path",
+  [Environment]::GetEnvironmentVariable("Path", "User") + ";$env:APPDATA\npm;C:\Program Files\nodejs",
+  "User"
+)
+```
+
+Close PowerShell completely and open a new window before trying `pnpm --version` again.
+
+If `corepack enable` fails with `EPERM` because it cannot write shims into `C:\Program Files\nodejs`, either run PowerShell as Administrator once and retry `corepack enable`, or avoid global shims and run pnpm through Corepack directly:
+
+```powershell
+corepack prepare pnpm@10.33.4 --activate
+corepack pnpm@10.33.4 install
+corepack pnpm@10.33.4 build:desktop
+```
+
+After that, `pnpm build:desktop` and `pnpm dev:desktop` will work from PowerShell.
+
 Browser mode with the Node/Fastify backend:
 
 ```bash
@@ -68,6 +150,8 @@ The Tauri desktop app embeds the same React UI, but serial-port discovery and MA
 
 On Windows, run `pnpm dev:desktop` from a native Windows terminal such as PowerShell, Windows Terminal, or CMD with Node.js, pnpm, Rust, and the Tauri prerequisites installed on Windows. If you start the desktop app from WSL, it is a Linux process and will not see Windows `COM` ports directly.
 
+The Windows bundle uses `apps/desktop/src-tauri/icons/icon.ico` for the executable resource icon.
+
 To build an installer or native desktop bundle:
 
 ```bash
@@ -75,6 +159,25 @@ pnpm build:desktop
 ```
 
 Install the Tauri prerequisites for your OS first. On Windows this includes Rust and the Microsoft WebView2 runtime/build tools required by Tauri.
+
+If `pnpm build:desktop` fails with `cargo metadata ... program not found`, install Rust for Windows:
+
+```powershell
+winget install Rustlang.Rustup
+```
+
+Close PowerShell completely, open a new PowerShell window, and verify:
+
+```powershell
+cargo --version
+rustc --version
+```
+
+Then run:
+
+```powershell
+& "$env:APPDATA\npm\pnpm.cmd" build:desktop
+```
 
 ## Serial Port Discovery
 
