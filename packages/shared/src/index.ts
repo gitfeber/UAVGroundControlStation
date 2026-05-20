@@ -15,6 +15,9 @@ export interface BackendStatus {
   serialConnected: boolean;
   mavlinkPackets: number;
   lastPacketMs: number | null;
+  rawBytes?: number;
+  parserErrors?: number;
+  lastSerialError?: string | null;
 }
 
 export interface LoggingStatus {

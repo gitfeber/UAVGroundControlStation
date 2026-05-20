@@ -15,7 +15,10 @@ const apiBase = import.meta.env.VITE_API_BASE_URL ?? "";
 const initialStatus: BackendStatus = {
   serialConnected: false,
   mavlinkPackets: 0,
-  lastPacketMs: null
+  lastPacketMs: null,
+  rawBytes: 0,
+  parserErrors: 0,
+  lastSerialError: null
 };
 
 const initialLoggingStatus: LoggingStatus = {

@@ -10,6 +10,7 @@ alwaysApply: true
 - Keep browser hardware and MAVLink access in `apps/server`; keep `apps/web` focused on visualization and local controls.
 - Keep Windows desktop hardware access in `apps/desktop` via Tauri/Rust so host `COM*` ports are available without WSL USB passthrough.
 - Update `README.md` whenever setup, commands, APIs, telemetry behavior, env vars, architecture, or operator workflow changes.
+- Bump the app version for every functional change; keep `package.json`, `apps/desktop/package.json`, `apps/desktop/src-tauri/tauri.conf.json`, and `apps/desktop/src-tauri/Cargo.toml` in sync so MSI upgrades install over older versions.
 - On Windows development machines, run normal repo maintenance commands through WSL.
 - Exception: native Tauri desktop dev/build should run in a Windows terminal when testing host `COM*` hardware access.
 - Keep serial-port handling cross-platform for macOS `/dev/cu.*` and `/dev/tty.*`, Windows `COM*`, and Linux `/dev/ttyACM*` / `/dev/ttyUSB*`; preserve manual path entry for unusual USB serial devices.

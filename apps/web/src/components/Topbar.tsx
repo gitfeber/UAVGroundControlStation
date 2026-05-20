@@ -142,9 +142,16 @@ export function Topbar({
       <div className="ml-auto flex items-center gap-3 text-xs text-slate-300">
         <Badge tone={badgeTone}>{badgeText}</Badge>
         <Badge tone={wsConnected ? "good" : "bad"}>{runtimeMode === "desktop" ? "Native bridge" : wsConnected ? "WS online" : "WS offline"}</Badge>
+        <span className="font-mono">Raw {(status.rawBytes ?? 0).toLocaleString()}B</span>
         <span className="font-mono">Packets {packetCount.toLocaleString()}</span>
+        {(status.parserErrors ?? 0) > 0 && <span className="font-mono text-yellow-200">Parse errors {status.parserErrors}</span>}
         <span className="font-mono">Last {packetAge}</span>
       </div>
+      {status.lastSerialError && (
+        <div className="absolute right-4 top-[4.25rem] z-30 max-w-xl rounded-lg border border-red-400/30 bg-red-950/90 px-3 py-2 text-xs text-red-100 shadow-glow">
+          Serial: {status.lastSerialError}
+        </div>
+      )}
     </header>
   );
 }

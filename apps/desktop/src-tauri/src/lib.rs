@@ -42,6 +42,9 @@ struct BackendStatus {
     serial_connected: bool,
     mavlink_packets: u64,
     last_packet_ms: Option<u64>,
+    raw_bytes: u64,
+    parser_errors: u64,
+    last_serial_error: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -165,6 +168,7 @@ struct MavlinkFrame {
 
 struct MavlinkFrameParser {
     buffer: Vec<u8>,
+    parser_errors: u64,
 }
 
 struct LoggerState {
@@ -172,10 +176,18 @@ struct LoggerState {
     writer: Option<BufWriter<File>>,
 }
 
+#[derive(Clone, Default)]
+struct SerialDiagnostics {
+    raw_bytes: u64,
+    parser_errors: u64,
+    last_serial_error: Option<String>,
+}
+
 struct DesktopState {
     telemetry: Arc<Mutex<TelemetryState>>,
     stop_reader: Mutex<Option<Arc<AtomicBool>>>,
     logging: Arc<Mutex<LoggerState>>,
+    diagnostics: Arc<Mutex<SerialDiagnostics>>,
 }
 
 const DEFAULT_BAUD_RATE: u32 = 460_800;
@@ -230,6 +242,10 @@ fn connect(request: ConnectRequest, state: State<DesktopState>, app: AppHandle) 
         let mut telemetry = state.telemetry.lock().map_err(lock_error)?;
         telemetry.connected = true;
     }
+    {
+        let mut diagnostics = state.diagnostics.lock().map_err(lock_error)?;
+        *diagnostics = SerialDiagnostics::default();
+    }
 
     *state.stop_reader.lock().map_err(lock_error)? = Some(stop_flag);
     emit_status_and_telemetry(&app, &state)?;
@@ -243,7 +259,9 @@ fn connect(request: ConnectRequest, state: State<DesktopState>, app: AppHandle) 
             telemetry.connected = false;
             let telemetry = telemetry.clone();
             let _ = worker_app.emit("telemetry", &telemetry);
-            let _ = worker_app.emit("status", status_from_telemetry(&telemetry));
+            if let Ok(diagnostics) = worker_state.diagnostics.lock() {
+                let _ = worker_app.emit("status", status_from_parts(&telemetry, &diagnostics));
+            }
         }
     });
 
@@ -348,6 +366,7 @@ pub fn run() {
                 file_path: None,
                 writer: None,
             })),
+            diagnostics: Arc::new(Mutex::new(SerialDiagnostics::default())),
         })
         .invoke_handler(tauri::generate_handler![
             list_ports,
@@ -369,6 +388,7 @@ impl DesktopState {
         Arc::new(WorkerState {
             telemetry: Arc::clone(&self.telemetry),
             logging: Arc::clone(&self.logging),
+            diagnostics: Arc::clone(&self.diagnostics),
         })
     }
 }
@@ -376,6 +396,7 @@ impl DesktopState {
 struct WorkerState {
     telemetry: Arc<Mutex<TelemetryState>>,
     logging: Arc<Mutex<LoggerState>>,
+    diagnostics: Arc<Mutex<SerialDiagnostics>>,
 }
 
 fn serial_reader_loop(
@@ -390,13 +411,28 @@ fn serial_reader_loop(
     while !stop_flag.load(Ordering::SeqCst) {
         match port.read(&mut read_buffer) {
             Ok(read) if read > 0 => {
-                for frame in parser.push(&read_buffer[..read]) {
+                if let Ok(mut diagnostics) = worker_state.diagnostics.lock() {
+                    diagnostics.raw_bytes += read as u64;
+                }
+                let frames = parser.push(&read_buffer[..read]);
+                let parser_errors = parser.take_parser_errors();
+                if parser_errors > 0 {
+                    if let Ok(mut diagnostics) = worker_state.diagnostics.lock() {
+                        diagnostics.parser_errors += parser_errors;
+                    }
+                }
+                for frame in frames {
                     apply_frame(&worker_state, &app, frame)?;
                 }
             }
             Ok(_) => {}
             Err(error) if error.kind() == std::io::ErrorKind::TimedOut => {}
-            Err(error) => return Err(error.to_string()),
+            Err(error) => {
+                if let Ok(mut diagnostics) = worker_state.diagnostics.lock() {
+                    diagnostics.last_serial_error = Some(error.to_string());
+                }
+                return Err(error.to_string());
+            }
         }
     }
 
@@ -428,14 +464,19 @@ fn apply_frame(worker_state: &WorkerState, app: &AppHandle, frame: MavlinkFrame)
 
     write_log_if_active(worker_state, &telemetry)?;
     let _ = app.emit("telemetry", &telemetry);
-    let _ = app.emit("status", status_from_telemetry(&telemetry));
+    if let Ok(diagnostics) = worker_state.diagnostics.lock() {
+        let _ = app.emit("status", status_from_parts(&telemetry, &diagnostics));
+    }
 
     Ok(())
 }
 
 impl MavlinkFrameParser {
     fn new() -> Self {
-        Self { buffer: Vec::new() }
+        Self {
+            buffer: Vec::new(),
+            parser_errors: 0,
+        }
     }
 
     fn push(&mut self, chunk: &[u8]) -> Vec<MavlinkFrame> {
@@ -444,11 +485,15 @@ impl MavlinkFrameParser {
 
         loop {
             let Some(start) = self.find_start() else {
+                if !self.buffer.is_empty() {
+                    self.parser_errors += 1;
+                }
                 self.buffer.clear();
                 break;
             };
 
             if start > 0 {
+                self.parser_errors += 1;
                 self.buffer.drain(0..start);
             }
 
@@ -459,10 +504,18 @@ impl MavlinkFrameParser {
             let frame: Vec<u8> = self.buffer.drain(0..frame_len).collect();
             if let Some(parsed) = parse_frame(&frame) {
                 frames.push(parsed);
+            } else {
+                self.parser_errors += 1;
             }
         }
 
         frames
+    }
+
+    fn take_parser_errors(&mut self) -> u64 {
+        let errors = self.parser_errors;
+        self.parser_errors = 0;
+        errors
     }
 
     fn find_start(&self) -> Option<usize> {
@@ -866,21 +919,26 @@ fn serial_info_from_unknown(path: &str) -> Option<DesktopSerialPortInfo> {
 
 fn status_from_state(state: &DesktopState) -> Result<BackendStatus, String> {
     let telemetry = state.telemetry.lock().map_err(lock_error)?;
-    Ok(status_from_telemetry(&telemetry))
+    let diagnostics = state.diagnostics.lock().map_err(lock_error)?;
+    Ok(status_from_parts(&telemetry, &diagnostics))
 }
 
-fn status_from_telemetry(telemetry: &TelemetryState) -> BackendStatus {
+fn status_from_parts(telemetry: &TelemetryState, diagnostics: &SerialDiagnostics) -> BackendStatus {
     BackendStatus {
         serial_connected: telemetry.connected,
         mavlink_packets: telemetry.packet_count,
         last_packet_ms: telemetry.last_packet_at.map(|time| now_ms().saturating_sub(time)),
+        raw_bytes: diagnostics.raw_bytes,
+        parser_errors: diagnostics.parser_errors,
+        last_serial_error: diagnostics.last_serial_error.clone(),
     }
 }
 
 fn emit_status_and_telemetry(app: &AppHandle, state: &DesktopState) -> Result<(), String> {
     let telemetry = state.telemetry.lock().map_err(lock_error)?.clone();
+    let diagnostics = state.diagnostics.lock().map_err(lock_error)?.clone();
     let _ = app.emit("telemetry", &telemetry);
-    let _ = app.emit("status", status_from_telemetry(&telemetry));
+    let _ = app.emit("status", status_from_parts(&telemetry, &diagnostics));
     Ok(())
 }
 

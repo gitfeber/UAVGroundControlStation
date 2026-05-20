@@ -26,6 +26,9 @@ export class SerialMavlinkService extends EventEmitter {
   private readonly store = new TelemetryStore();
   private port: SerialPort | null = null;
   private serialConnected = false;
+  private rawBytes = 0;
+  private parserErrors = 0;
+  private lastSerialError: string | null = null;
 
   async listPorts(): Promise<SerialPortInfo[]> {
     const ports = await SerialPort.list();
@@ -53,6 +56,9 @@ export class SerialMavlinkService extends EventEmitter {
     }
 
     await this.disconnect();
+    this.rawBytes = 0;
+    this.parserErrors = 0;
+    this.lastSerialError = null;
 
     const port = new SerialPort({
       path: request.path,
@@ -73,12 +79,18 @@ export class SerialMavlinkService extends EventEmitter {
 
     const mavlinkStream = createMavLinkStream(port, {
       onCrcError: (packet) => {
+        this.parserErrors += 1;
         console.warn(`Dropped MAVLink packet with invalid CRC (${packet.length} bytes).`);
       }
     });
 
+    port.on("data", (chunk: Buffer) => {
+      this.rawBytes += chunk.length;
+    });
     mavlinkStream.on("data", (packet: MavLinkPacket) => this.applyPacket(packet));
     mavlinkStream.on("error", (error) => {
+      this.parserErrors += 1;
+      this.lastSerialError = error instanceof Error ? error.message : String(error);
       console.error("MAVLink parser error:", error);
     });
 
@@ -88,6 +100,7 @@ export class SerialMavlinkService extends EventEmitter {
       this.emitTelemetry();
     });
     port.on("error", (error) => {
+      this.lastSerialError = error.message;
       console.error("Serial port error:", error);
     });
 
@@ -130,7 +143,10 @@ export class SerialMavlinkService extends EventEmitter {
     return {
       serialConnected: this.serialConnected,
       mavlinkPackets: telemetry.packetCount,
-      lastPacketMs: telemetry.lastPacketAt === null ? null : Date.now() - telemetry.lastPacketAt
+      lastPacketMs: telemetry.lastPacketAt === null ? null : Date.now() - telemetry.lastPacketAt,
+      rawBytes: this.rawBytes,
+      parserErrors: this.parserErrors,
+      lastSerialError: this.lastSerialError
     };
   }
 

@@ -26,6 +26,17 @@ packages/
 logs/            Optional local JSONL flight logs
 ```
 
+## Versioning
+
+Every functional change to the application must bump the app version before building desktop installers. Keep these files in sync:
+
+- `package.json`
+- `apps/desktop/package.json`
+- `apps/desktop/src-tauri/tauri.conf.json`
+- `apps/desktop/src-tauri/Cargo.toml`
+
+Tauri uses the desktop version for MSI/NSIS bundle metadata. A newer version lets Windows install the latest MSI over an older installed build.
+
 ## Requirements
 
 - Node.js 22.13+ recommended, or Node.js 20.19+ with pnpm 10
@@ -210,6 +221,18 @@ The UI still provides `Manual path...` for unusual devices, custom mappings, or 
 If the backend can open the serial port but no packets arrive, the UI shows `Serial linked`. That usually means the port is correct but MAVLink telemetry is not flowing yet.
 
 The dropdown shows every serial device reported by the operating system, including manufacturer, friendly name, VID/PID, and serial number when available. If the radio appears under an unusual name, use `Manual path...` and enter the port path directly.
+
+## Telemetry Troubleshooting
+
+After connecting a port, use the topbar diagnostics:
+
+- `Raw ...B` increases: the selected serial port is producing bytes.
+- `Packets` increases: valid MAVLink v1/v2 packets are being parsed.
+- `Raw` stays at `0B`: the selected port is open but not sending data. Check the TX16S USB mode, telemetry settings, cable, driver, or try another COM port.
+- `Raw` increases but `Packets` stays at `0`: the port is sending data, but it is not MAVLink v1/v2 at the selected baud rate. Try `460800`, then `115200`, then `57600`.
+- `Parse errors` increases: bytes are arriving, but they do not look like clean MAVLink frames. This can be a wrong baud rate, another protocol such as CRSF/EdgeTX telemetry, or a non-telemetry USB mode.
+
+Important TX16S note: a USB connection to the radio does not automatically guarantee a MAVLink byte stream. Depending on EdgeTX/ELRS setup, the radio may expose joystick, storage, serial passthrough, CRSF telemetry, or no MAVLink stream at all. For this app, the selected port must output MAVLink v1/v2 bytes.
 
 ## API
 

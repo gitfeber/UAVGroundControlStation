@@ -9,6 +9,7 @@ This repository is `uav-ground-control-station`, a slim local Ground Control Sta
 - Keep shared API and telemetry contracts in `packages/shared`.
 - Hardware access belongs in `apps/server`; the browser app must stay visualization/control-only.
 - Update `README.md` whenever a change affects setup, commands, architecture, APIs, telemetry behavior, environment variables, or operator workflow.
+- Bump the application version for every functional app change; keep `package.json`, `apps/desktop/package.json`, `apps/desktop/src-tauri/tauri.conf.json`, and `apps/desktop/src-tauri/Cargo.toml` in sync so MSI upgrades install over older versions.
 - On Windows development machines, run normal repo maintenance commands through WSL.
 - Exception: native Tauri desktop dev/build should run in a Windows terminal when testing host `COM*` hardware access.
 - Keep serial-port handling cross-platform: support macOS `/dev/cu.*` and `/dev/tty.*`, Windows `COM*`, and Linux `/dev/ttyACM*` / `/dev/ttyUSB*`, including manual path entry when OS metadata is incomplete.
