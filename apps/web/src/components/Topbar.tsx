@@ -9,6 +9,7 @@ interface TopbarProps {
   ports: SerialPortInfo[];
   status: BackendStatus;
   loggingStatus: LoggingStatus;
+  runtimeMode: "web" | "desktop";
   wsConnected: boolean;
   packetCount: number;
   packetAge: string;
@@ -24,6 +25,7 @@ export function Topbar({
   ports,
   status,
   loggingStatus,
+  runtimeMode,
   wsConnected,
   packetCount,
   packetAge,
@@ -117,7 +119,9 @@ export function Topbar({
 
       {ports.length === 0 && (
         <span className="max-w-[320px] text-xs leading-tight text-yellow-200/90">
-          TX16S on Windows is not visible to a WSL backend until the USB serial device is attached to WSL.
+          {runtimeMode === "desktop"
+            ? "No host serial devices visible. Check the USB cable, radio USB mode, and Windows driver."
+            : "TX16S on Windows is not visible to a WSL backend until the USB serial device is attached to WSL."}
         </span>
       )}
 
@@ -137,7 +141,7 @@ export function Topbar({
 
       <div className="ml-auto flex items-center gap-3 text-xs text-slate-300">
         <Badge tone={badgeTone}>{badgeText}</Badge>
-        <Badge tone={wsConnected ? "good" : "bad"}>{wsConnected ? "WS online" : "WS offline"}</Badge>
+        <Badge tone={wsConnected ? "good" : "bad"}>{runtimeMode === "desktop" ? "Native bridge" : wsConnected ? "WS online" : "WS offline"}</Badge>
         <span className="font-mono">Packets {packetCount.toLocaleString()}</span>
         <span className="font-mono">Last {packetAge}</span>
       </div>

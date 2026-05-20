@@ -9,14 +9,17 @@ This repository is `uav-ground-control-station`, a slim local Ground Control Sta
 - Keep shared API and telemetry contracts in `packages/shared`.
 - Hardware access belongs in `apps/server`; the browser app must stay visualization/control-only.
 - Update `README.md` whenever a change affects setup, commands, architecture, APIs, telemetry behavior, environment variables, or operator workflow.
-- On Windows development machines, run terminal commands through WSL.
+- On Windows development machines, run normal repo maintenance commands through WSL.
+- Exception: native Tauri desktop dev/build should run in a Windows terminal when testing host `COM*` hardware access.
 - Keep serial-port handling cross-platform: support macOS `/dev/cu.*` and `/dev/tty.*`, Windows `COM*`, and Linux `/dev/ttyACM*` / `/dev/ttyUSB*`, including manual path entry when OS metadata is incomplete.
 - Filter out empty system serial ports unless they have device metadata; prefer USB/PNP-backed ports in the UI.
+- For Windows hardware access, prefer the Tauri desktop app over a WSL-hosted Node backend because Tauri can open host `COM*` ports directly.
 
 ## Architecture
 
 - Frontend: `apps/web`, React + Vite + Tailwind + MapLibre GL JS.
 - Backend: `apps/server`, Fastify + WebSocket + `serialport`.
+- Desktop: `apps/desktop`, Tauri v2 with native Rust serial access and the same React UI.
 - Shared types: `packages/shared`.
 - Backend runs on `http://localhost:3001`.
 - Frontend runs on `http://localhost:5173`.

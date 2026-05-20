@@ -16,6 +16,7 @@ export function App() {
     ports,
     error,
     wsConnected,
+    runtimeMode,
     refreshPorts,
     connect,
     disconnect,
@@ -51,6 +52,7 @@ export function App() {
         ports={ports}
         status={status}
         loggingStatus={loggingStatus}
+        runtimeMode={runtimeMode}
         wsConnected={wsConnected}
         packetCount={telemetry.packetCount}
         packetAge={packetAge(telemetry.lastPacketAt)}

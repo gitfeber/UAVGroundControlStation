@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@uav-ground-control-station/shared": "workspace:*",
+    "@tauri-apps/api": "latest",
     "@vitejs/plugin-react": "latest",
     "autoprefixer": "latest",
     "maplibre-gl": "latest",

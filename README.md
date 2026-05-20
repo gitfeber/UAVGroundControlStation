@@ -12,6 +12,7 @@ The MVP reads MAVLink telemetry from a TX16S / ELRS / USB-C serial connection th
 - MAVLink: `node-mavlink` packet stream parsing with focused MVP payload normalization
 - Frontend: React, Vite, TypeScript, Tailwind CSS
 - Map: MapLibre GL JS
+- Desktop: Tauri v2 native shell for Windows/macOS/Linux host serial access
 
 ## Project Structure
 
@@ -19,6 +20,7 @@ The MVP reads MAVLink telemetry from a TX16S / ELRS / USB-C serial connection th
 apps/
   server/        Fastify backend, serial/MAVLink service, WebSocket broadcaster, logger
   web/           React/Vite dashboard, map, sidebar, camera panel
+  desktop/       Tauri desktop shell with native serial-port access
 packages/
   shared/        Shared TypeScript API and telemetry types
 logs/            Optional local JSONL flight logs
@@ -28,10 +30,13 @@ logs/            Optional local JSONL flight logs
 
 - Node.js 22.13+ recommended, or Node.js 20.19+ with pnpm 10
 - pnpm 10 or newer compatible with your Node.js version
+- Rust stable and the Tauri prerequisites for native desktop builds
 - macOS, Windows, or Linux
 - A TX16S / ELRS connection over USB-C, USB-A adapter, hub, dock, or any other USB connection that exposes MAVLink telemetry as a serial port
 
 ## Setup
+
+Browser mode with the Node/Fastify backend:
 
 ```bash
 pnpm install
@@ -52,9 +57,28 @@ The backend listens on:
 http://localhost:3001
 ```
 
+Desktop mode with native host serial access:
+
+```bash
+pnpm install
+pnpm dev:desktop
+```
+
+The Tauri desktop app embeds the same React UI, but serial-port discovery and MAVLink reading happen in the native Rust process. On Windows this means the app can see Windows `COM` ports directly, without attaching the TX16S to WSL.
+
+On Windows, run `pnpm dev:desktop` from a native Windows terminal such as PowerShell, Windows Terminal, or CMD with Node.js, pnpm, Rust, and the Tauri prerequisites installed on Windows. If you start the desktop app from WSL, it is a Linux process and will not see Windows `COM` ports directly.
+
+To build an installer or native desktop bundle:
+
+```bash
+pnpm build:desktop
+```
+
+Install the Tauri prerequisites for your OS first. On Windows this includes Rust and the Microsoft WebView2 runtime/build tools required by Tauri.
+
 ## Serial Port Discovery
 
-The backend only lists serial ports that look device-backed and usable for hardware telemetry. It filters out common empty system serial ports such as Linux/WSL `/dev/ttyS*` entries unless the operating system reports USB, PNP, manufacturer, serial number, VID/PID, or location metadata.
+The app only lists serial ports that look device-backed and usable for hardware telemetry. It filters out common empty system serial ports such as Linux/WSL `/dev/ttyS*` entries unless the operating system reports USB, PNP, manufacturer, serial number, VID/PID, or location metadata.
 
 Supported device names include:
 
@@ -64,6 +88,7 @@ Supported device names include:
 
 If the TX16S is physically connected to Windows but the backend runs inside WSL, the Windows `COM` port is not automatically visible inside WSL. Use one of these approaches:
 
+- Prefer `pnpm dev:desktop` on Windows. The Tauri app accesses Windows serial ports directly.
 - Attach the USB device to WSL with `usbipd-win`, then select the resulting Linux device such as `/dev/ttyACM0`.
 - Run the backend on the Windows host so it can open the Windows `COM` port directly.
 
@@ -127,12 +152,14 @@ Set `VITE_VIDEO_URL` and `VITE_VIDEO_KIND`, or edit the URL directly in the pane
 
 ```bash
 pnpm dev
+pnpm dev:desktop
 pnpm build
+pnpm build:desktop
 pnpm lint
 pnpm typecheck
 ```
 
-On Windows development machines for this repository, run terminal commands through WSL. If the TX16S is connected to Windows but the backend runs inside WSL, expose the USB serial device to WSL first or run the Node backend in the host environment where the `COM` port is visible.
+On Windows development machines for this repository, normal repo maintenance commands can run through WSL. For native Windows desktop hardware access, run `pnpm dev:desktop` or `pnpm build:desktop` in a native Windows terminal so Tauri can open host `COM` ports directly.
 
 ## MVP Scope
 
