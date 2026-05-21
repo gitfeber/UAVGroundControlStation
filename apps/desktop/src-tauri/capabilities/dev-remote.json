@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "dev-remote-capability",
+  "description": "Vite dev server access to the desktop bridge during pnpm dev:desktop",
+  "windows": ["*"],
+  "remote": {
+    "urls": ["http://localhost:5173", "http://127.0.0.1:5173"]
+  },
+  "permissions": ["core:default"]
+}

@@ -145,6 +145,7 @@ export class SerialMavlinkService extends EventEmitter {
       mavlinkPackets: telemetry.packetCount,
       lastPacketMs: telemetry.lastPacketAt === null ? null : Date.now() - telemetry.lastPacketAt,
       rawBytes: this.rawBytes,
+      txBytes: 0,
       parserErrors: this.parserErrors,
       lastSerialError: this.lastSerialError
     };

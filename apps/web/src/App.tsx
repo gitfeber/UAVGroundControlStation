@@ -3,6 +3,7 @@ import { getAlerts } from "./lib/alerts";
 import { haversineDistanceM, type Coordinate, validCoordinate } from "./lib/geo";
 import { packetAge } from "./lib/format";
 import { useTelemetry } from "./hooks/useTelemetry";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { MapPanel } from "./components/MapPanel";
 import { TelemetrySidebar } from "./components/TelemetrySidebar";
 import { Topbar } from "./components/Topbar";
@@ -29,11 +30,11 @@ export function App() {
   } = useTelemetry();
 
   const [home, setHome] = useState<Coordinate | null>(null);
-  const coordinate = validCoordinate(telemetry.position.lat, telemetry.position.lon);
+  const coordinate = validCoordinate(telemetry.position?.lat, telemetry.position?.lon);
 
   useEffect(() => {
     if (!home && coordinate) {
-      setHome(coordinate);
+      setHome({ lat: coordinate.lat, lon: coordinate.lon });
     }
   }, [coordinate, home]);
 
@@ -69,8 +70,10 @@ export function App() {
 
       <div className="relative flex min-h-0 flex-1">
         <TelemetrySidebar telemetry={telemetry} distanceFromHome={distanceFromHome} alerts={alerts} />
-        <MapPanel telemetry={telemetry} coordinate={coordinate} home={home} />
-        <ActivityLogPanel logs={logs} onClear={clearLogs} />
+        <ErrorBoundary>
+          <MapPanel telemetry={telemetry} coordinate={coordinate} home={home} />
+        </ErrorBoundary>
+        <ActivityLogPanel logs={logs} messages={status.mavlinkMessages ?? []} onClear={clearLogs} />
         <VideoPanel />
 
         {error && (

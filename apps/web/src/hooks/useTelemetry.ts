@@ -8,7 +8,7 @@ import type {
   TelemetryEnvelope,
   TelemetryState
 } from "@uav-ground-control-station/shared";
-import { createEmptyTelemetryState } from "../lib/initialTelemetry";
+import { createEmptyTelemetryState, normalizeTelemetryState } from "../lib/initialTelemetry";
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -17,6 +17,7 @@ const initialStatus: BackendStatus = {
   mavlinkPackets: 0,
   lastPacketMs: null,
   rawBytes: 0,
+  txBytes: 0,
   parserErrors: 0,
   lastSerialError: null
 };
@@ -116,8 +117,14 @@ export function useTelemetry() {
 
   const refreshStatus = useCallback(async () => {
     if (mode === "desktop") {
-      setStatus(await invokeTauri<BackendStatus>("get_status"));
-      setLoggingStatus(await invokeTauri<LoggingStatus>("logging_status"));
+      const [nextStatus, nextTelemetry, nextLoggingStatus] = await Promise.all([
+        invokeTauri<BackendStatus>("get_status"),
+        invokeTauri<TelemetryState>("get_telemetry"),
+        invokeTauri<LoggingStatus>("logging_status")
+      ]);
+      setStatus(nextStatus);
+      setTelemetry(normalizeTelemetryState(nextTelemetry));
+      setLoggingStatus(nextLoggingStatus);
     } else {
       setStatus(await requestJson<BackendStatus>("/api/status"));
       setLoggingStatus(await requestJson<LoggingStatus>("/api/logging/status"));
@@ -145,7 +152,7 @@ export function useTelemetry() {
           })
         );
       }
-      addLog("success", `Serial port opened: ${request.path}. Waiting for MAVLink bytes.`);
+      addLog("success", `Serial port opened: ${request.path}. 8N1/no-flow-control, DTR/RTS enabled, initial GCS heartbeat written.`);
     } catch (cause: unknown) {
       const message = cause instanceof Error ? cause.message : "Unable to connect serial port.";
       activeConnectionRef.current = null;
@@ -168,9 +175,9 @@ export function useTelemetry() {
 
   const resetSession = useCallback(async () => {
     if (mode === "desktop") {
-      setTelemetry(await invokeTauri<TelemetryState>("reset_session"));
+      setTelemetry(normalizeTelemetryState(await invokeTauri<TelemetryState>("reset_session")));
     } else {
-      setTelemetry(await requestJson<TelemetryState>("/api/reset", { method: "POST" }));
+      setTelemetry(normalizeTelemetryState(await requestJson<TelemetryState>("/api/reset", { method: "POST" })));
     }
     warningStateRef.current = { noRawBytes: false, noMavlinkPackets: false };
     addLog("info", "Telemetry session reset.");
@@ -216,11 +223,15 @@ export function useTelemetry() {
       addLog("success", `Raw serial bytes detected (${status.rawBytes?.toLocaleString()}B).`);
     }
 
+    if ((previous.txBytes ?? 0) === 0 && (status.txBytes ?? 0) > 0) {
+      addLog("info", `Outbound MAVLink wake-up bytes sent (${status.txBytes?.toLocaleString()}B).`);
+    }
+
     if (previous.mavlinkPackets === 0 && status.mavlinkPackets > 0) {
       addLog("success", `MAVLink packets detected (${status.mavlinkPackets.toLocaleString()}).`);
     }
 
-    if ((status.parserErrors ?? 0) > (previous.parserErrors ?? 0)) {
+    if (status.serialConnected && (status.parserErrors ?? 0) > (previous.parserErrors ?? 0)) {
       addLog("warning", `Parser errors increased to ${status.parserErrors}. Check baud rate or protocol.`);
     }
 
@@ -239,13 +250,16 @@ export function useTelemetry() {
 
       const elapsedMs = Date.now() - connection.startedAt;
       const rawBytes = currentStatus.rawBytes ?? 0;
+      const txBytes = currentStatus.txBytes ?? 0;
       const packets = currentStatus.mavlinkPackets;
 
       if (elapsedMs > 3000 && rawBytes === 0 && !warningStateRef.current.noRawBytes) {
         warningStateRef.current.noRawBytes = true;
         addLog(
           "warning",
-          `No serial bytes after 3s on ${connection.path}. Check TX16S USB mode, cable, driver, selected COM port, and whether telemetry is enabled.`
+          txBytes > 0
+            ? `No serial bytes after 3s on ${connection.path}, although the app sent ${txBytes.toLocaleString()} wake-up bytes. The FC is not responding on this port.`
+            : `No serial bytes after 3s on ${connection.path}. Check USB mode, cable, driver, selected COM port, and whether telemetry is enabled.`
         );
       }
 
@@ -280,7 +294,7 @@ export function useTelemetry() {
       ws.addEventListener("message", (event) => {
         const message = JSON.parse(event.data as string) as ServerMessage;
         if (message.type === "telemetry") {
-          setTelemetry(message.data);
+          setTelemetry(normalizeTelemetryState(message.data));
         } else if (message.type === "status") {
           setStatus(message.data);
         }
@@ -315,41 +329,66 @@ export function useTelemetry() {
     }
 
     let disposed = false;
-    setWsConnected(true);
+    let cleanup: (() => void) | undefined;
 
-    const setup = async () => {
+    const setup = async (): Promise<(() => void) | undefined> => {
       const { listen } = await import("@tauri-apps/api/event");
       const unlistenTelemetry = await listen<TelemetryState>("telemetry", (event) => {
-        setTelemetry(event.payload);
+        setTelemetry(normalizeTelemetryState(event.payload));
       });
       const unlistenStatus = await listen<BackendStatus>("status", (event) => {
         setStatus(event.payload);
       });
 
       if (disposed) {
-        unlistenTelemetry();
-        unlistenStatus();
+        await Promise.all([unlistenTelemetry(), unlistenStatus()]);
+        return undefined;
       }
 
+      setWsConnected(true);
+      setError(null);
+      addLog("success", "Desktop event bridge connected.");
+
       return () => {
-        unlistenTelemetry();
-        unlistenStatus();
+        void Promise.all([unlistenTelemetry(), unlistenStatus()]);
       };
     };
 
-    let cleanup: (() => void) | undefined;
     setup()
       .then((unlisten) => {
         cleanup = unlisten;
       })
-      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Unable to initialize desktop bridge."));
+      .catch((cause: unknown) => {
+        const message =
+          cause instanceof Error ? cause.message : "Unable to initialize desktop event listeners.";
+        addLog(
+          "warning",
+          `${message} Falling back to 1s polling. Rebuild the desktop app if this persists after an MSI upgrade.`
+        );
+        setWsConnected(false);
+      });
 
     return () => {
       disposed = true;
       cleanup?.();
       setWsConnected(false);
     };
-  }, [mode]);
+  }, [addLog, mode]);
+
+  useEffect(() => {
+    if (mode !== "desktop") {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      refreshStatus().catch((cause: unknown) => {
+        const message = cause instanceof Error ? cause.message : "Unable to refresh desktop status.";
+        setError(message);
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [mode, refreshStatus]);
 
   return useMemo(
     () => ({

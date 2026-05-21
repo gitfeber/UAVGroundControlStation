@@ -1,7 +1,8 @@
 use chrono::Local;
 use serde::{Deserialize, Serialize};
-use serialport::{SerialPortType, UsbPortInfo};
+use serialport::{DataBits, FlowControl, Parity, SerialPortType, StopBits, UsbPortInfo};
 use std::{
+    collections::HashMap,
     fs::{create_dir_all, File},
     io::{BufWriter, Read, Write},
     path::PathBuf,
@@ -10,7 +11,7 @@ use std::{
         Arc, Mutex,
     },
     thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -43,8 +44,10 @@ struct BackendStatus {
     mavlink_packets: u64,
     last_packet_ms: Option<u64>,
     raw_bytes: u64,
+    tx_bytes: u64,
     parser_errors: u64,
     last_serial_error: Option<String>,
+    mavlink_messages: Vec<MavlinkMessageStat>,
 }
 
 #[derive(Clone, Serialize)]
@@ -68,6 +71,15 @@ struct TelemetryState {
     radio: RadioState,
     system: SystemState,
     stats: StatsState,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MavlinkMessageStat {
+    id: u32,
+    label: String,
+    count: u64,
+    last_seen_at: u64,
 }
 
 #[derive(Clone, Serialize)]
@@ -179,8 +191,10 @@ struct LoggerState {
 #[derive(Clone, Default)]
 struct SerialDiagnostics {
     raw_bytes: u64,
+    tx_bytes: u64,
     parser_errors: u64,
     last_serial_error: Option<String>,
+    message_counts: HashMap<u32, MavlinkMessageStat>,
 }
 
 struct DesktopState {
@@ -229,10 +243,20 @@ fn connect(request: ConnectRequest, state: State<DesktopState>, app: AppHandle) 
     }
 
     let baud_rate = request.baud_rate.unwrap_or(DEFAULT_BAUD_RATE);
-    let port = serialport::new(path, baud_rate)
-        .timeout(Duration::from_millis(50))
+    let mut port = serialport::new(path, baud_rate)
+        .data_bits(DataBits::Eight)
+        .parity(Parity::None)
+        .stop_bits(StopBits::One)
+        .flow_control(FlowControl::None)
+        .timeout(Duration::from_millis(250))
         .open()
         .map_err(|error| error.to_string())?;
+    port.write_data_terminal_ready(true)
+        .map_err(|error| format!("Failed to set DTR: {error}"))?;
+    port.write_request_to_send(true)
+        .map_err(|error| format!("Failed to set RTS: {error}"))?;
+    thread::sleep(Duration::from_millis(500));
+    let mut outbound_sequence = 0_u8;
     let stop_flag = Arc::new(AtomicBool::new(false));
     let worker_stop_flag = Arc::clone(&stop_flag);
     let worker_state = state.inner().clone_for_worker();
@@ -246,12 +270,24 @@ fn connect(request: ConnectRequest, state: State<DesktopState>, app: AppHandle) 
         let mut diagnostics = state.diagnostics.lock().map_err(lock_error)?;
         *diagnostics = SerialDiagnostics::default();
     }
+    let initial_wakeup_bytes = send_gcs_heartbeat(&mut *port, &mut outbound_sequence)
+        .map_err(|error| format!("Failed to write MAVLink wake-up traffic: {error}"))?;
+    {
+        let mut diagnostics = state.diagnostics.lock().map_err(lock_error)?;
+        diagnostics.tx_bytes += initial_wakeup_bytes as u64;
+    }
 
     *state.stop_reader.lock().map_err(lock_error)? = Some(stop_flag);
     emit_status_and_telemetry(&app, &state)?;
 
     thread::spawn(move || {
-        if let Err(error) = serial_reader_loop(port, worker_stop_flag, Arc::clone(&worker_state), worker_app.clone()) {
+        if let Err(error) = serial_reader_loop(
+            port,
+            worker_stop_flag,
+            Arc::clone(&worker_state),
+            worker_app.clone(),
+            outbound_sequence,
+        ) {
             eprintln!("Desktop serial reader stopped: {error}");
         }
 
@@ -404,11 +440,38 @@ fn serial_reader_loop(
     stop_flag: Arc<AtomicBool>,
     worker_state: Arc<WorkerState>,
     app: AppHandle,
+    initial_sequence: u8,
 ) -> Result<(), String> {
     let mut parser = MavlinkFrameParser::new();
     let mut read_buffer = [0_u8; 1024];
+    let mut last_status_emit = Instant::now() - Duration::from_secs(1);
+    let mut last_gcs_heartbeat = Instant::now() - Duration::from_secs(2);
+    let mut last_stream_request = Instant::now() - Duration::from_secs(2);
+    let mut outbound_sequence = initial_sequence;
 
     while !stop_flag.load(Ordering::SeqCst) {
+        let mut status_dirty = false;
+
+        if last_gcs_heartbeat.elapsed() >= Duration::from_secs(1) {
+            let written = send_gcs_heartbeat(&mut *port, &mut outbound_sequence).map_err(|error| {
+                record_serial_error(&worker_state, &error.to_string());
+                error.to_string()
+            })?;
+            record_tx_bytes(&worker_state, written);
+            status_dirty = true;
+            last_gcs_heartbeat = Instant::now();
+        }
+
+        if should_request_streams(&worker_state, last_stream_request) {
+            let written = request_ardupilot_streams(&mut *port, &mut outbound_sequence).map_err(|error| {
+                record_serial_error(&worker_state, &error.to_string());
+                error.to_string()
+            })?;
+            record_tx_bytes(&worker_state, written);
+            status_dirty = true;
+            last_stream_request = Instant::now();
+        }
+
         match port.read(&mut read_buffer) {
             Ok(read) if read > 0 => {
                 if let Ok(mut diagnostics) = worker_state.diagnostics.lock() {
@@ -420,27 +483,141 @@ fn serial_reader_loop(
                     if let Ok(mut diagnostics) = worker_state.diagnostics.lock() {
                         diagnostics.parser_errors += parser_errors;
                     }
+                    status_dirty = true;
                 }
                 for frame in frames {
                     apply_frame(&worker_state, &app, frame)?;
                 }
+                status_dirty = true;
             }
             Ok(_) => {}
             Err(error) if error.kind() == std::io::ErrorKind::TimedOut => {}
             Err(error) => {
-                if let Ok(mut diagnostics) = worker_state.diagnostics.lock() {
-                    diagnostics.last_serial_error = Some(error.to_string());
-                }
+                record_serial_error(&worker_state, &error.to_string());
+                emit_worker_status(&worker_state, &app)?;
                 return Err(error.to_string());
             }
+        }
+
+        if status_dirty || last_status_emit.elapsed() >= Duration::from_secs(1) {
+            emit_worker_status(&worker_state, &app)?;
+            last_status_emit = Instant::now();
         }
     }
 
     Ok(())
 }
 
+fn should_request_streams(worker_state: &WorkerState, last_stream_request: Instant) -> bool {
+    let has_packets = worker_state
+        .telemetry
+        .lock()
+        .map(|telemetry| telemetry.packet_count > 0)
+        .unwrap_or(false);
+
+    has_packets && last_stream_request.elapsed() >= Duration::from_secs(10)
+}
+
+fn send_gcs_heartbeat(port: &mut dyn serialport::SerialPort, sequence: &mut u8) -> std::io::Result<usize> {
+    let mut payload = Vec::with_capacity(9);
+    payload.extend_from_slice(&0_u32.to_le_bytes());
+    payload.push(6); // MAV_TYPE_GCS
+    payload.push(8); // MAV_AUTOPILOT_INVALID
+    payload.push(0); // base_mode
+    payload.push(0); // system_status
+    payload.push(3); // mavlink_version
+
+    let frame = mavlink_v1_packet(0, &payload, 50, sequence);
+    port.write_all(&frame)?;
+    port.flush()?;
+    Ok(frame.len())
+}
+
+fn request_ardupilot_streams(port: &mut dyn serialport::SerialPort, sequence: &mut u8) -> std::io::Result<usize> {
+    let mut total_written = 0;
+    for stream_id in [0_u8, 1, 2, 3, 6, 10, 11, 12] {
+        let mut payload = Vec::with_capacity(6);
+        payload.extend_from_slice(&4_u16.to_le_bytes());
+        payload.push(1); // target_system, common default for ArduPilot over USB
+        payload.push(1); // target_component
+        payload.push(stream_id);
+        payload.push(1); // start_stop
+
+        let frame = mavlink_v1_packet(66, &payload, 148, sequence);
+        port.write_all(&frame)?;
+        total_written += frame.len();
+    }
+
+    port.flush()?;
+    Ok(total_written)
+}
+
+fn mavlink_v1_packet(message_id: u8, payload: &[u8], crc_extra: u8, sequence: &mut u8) -> Vec<u8> {
+    let current_sequence = *sequence;
+    *sequence = (*sequence).wrapping_add(1);
+
+    let mut frame = Vec::with_capacity(8 + payload.len());
+    frame.push(0xfe);
+    frame.push(payload.len() as u8);
+    frame.push(current_sequence);
+    frame.push(255); // GCS system id
+    frame.push(190); // GCS component id
+    frame.push(message_id);
+    frame.extend_from_slice(payload);
+
+    let checksum = mavlink_x25_crc(&frame[1..], crc_extra);
+    frame.extend_from_slice(&checksum.to_le_bytes());
+    frame
+}
+
+fn mavlink_x25_crc(data: &[u8], crc_extra: u8) -> u16 {
+    let mut crc = 0xffff_u16;
+    for byte in data.iter().copied().chain(std::iter::once(crc_extra)) {
+        let tmp = byte ^ (crc as u8);
+        let tmp = tmp ^ (tmp << 4);
+        crc = (crc >> 8) ^ ((tmp as u16) << 8) ^ ((tmp as u16) << 3) ^ ((tmp as u16) >> 4);
+    }
+    crc
+}
+
+fn record_serial_error(worker_state: &WorkerState, error: &str) {
+    if let Ok(mut diagnostics) = worker_state.diagnostics.lock() {
+        diagnostics.last_serial_error = Some(error.to_string());
+    }
+}
+
+fn record_tx_bytes(worker_state: &WorkerState, written: usize) {
+    if let Ok(mut diagnostics) = worker_state.diagnostics.lock() {
+        diagnostics.tx_bytes += written as u64;
+    }
+}
+
+fn record_message_stat(worker_state: &WorkerState, message_id: u32) {
+    if let Ok(mut diagnostics) = worker_state.diagnostics.lock() {
+        let entry = diagnostics
+            .message_counts
+            .entry(message_id)
+            .or_insert_with(|| MavlinkMessageStat {
+                id: message_id,
+                label: mavlink_message_label(message_id),
+                count: 0,
+                last_seen_at: now_ms(),
+            });
+        entry.count += 1;
+        entry.last_seen_at = now_ms();
+    }
+}
+
+fn emit_worker_status(worker_state: &WorkerState, app: &AppHandle) -> Result<(), String> {
+    let telemetry = worker_state.telemetry.lock().map_err(lock_error)?.clone();
+    let diagnostics = worker_state.diagnostics.lock().map_err(lock_error)?.clone();
+    let _ = app.emit("status", status_from_parts(&telemetry, &diagnostics));
+    Ok(())
+}
+
 fn apply_frame(worker_state: &WorkerState, app: &AppHandle, frame: MavlinkFrame) -> Result<(), String> {
     let telemetry = {
+        record_message_stat(worker_state, frame.message_id);
         let mut telemetry = worker_state.telemetry.lock().map_err(lock_error)?;
         mark_packet(&mut telemetry, frame.system_id, frame.component_id);
 
@@ -485,15 +662,11 @@ impl MavlinkFrameParser {
 
         loop {
             let Some(start) = self.find_start() else {
-                if !self.buffer.is_empty() {
-                    self.parser_errors += 1;
-                }
                 self.buffer.clear();
                 break;
             };
 
             if start > 0 {
-                self.parser_errors += 1;
                 self.buffer.drain(0..start);
             }
 
@@ -698,7 +871,7 @@ fn update_battery_status(telemetry: &mut TelemetryState, payload: &[u8]) {
 
     let mut total_voltage = 0.0;
     let mut cells = 0;
-    for offset in (5..25).step_by(2) {
+    for offset in (10..30).step_by(2) {
         if let Some(mv) = read_u16(payload, offset) {
             if mv > 0 && mv != u16::MAX {
                 total_voltage += mv as f64 / 1000.0;
@@ -707,8 +880,8 @@ fn update_battery_status(telemetry: &mut TelemetryState, payload: &[u8]) {
         }
     }
 
-    let current = read_i16(payload, 25).and_then(|value| (value != -1).then_some(value as f64 / 100.0));
-    let consumed = read_i32(payload, 27).and_then(|value| (value >= 0).then_some(value));
+    let current = read_i16(payload, 30).and_then(|value| (value != -1).then_some(value as f64 / 100.0));
+    let consumed = read_i32(payload, 0).and_then(|value| (value >= 0).then_some(value));
     let remaining = read_i8(payload, 35).and_then(|value| (value >= 0).then_some(value));
 
     set_voltage(telemetry, (cells > 0).then_some(total_voltage));
@@ -722,24 +895,24 @@ fn update_gps_raw_int(telemetry: &mut TelemetryState, payload: &[u8]) {
         return;
     }
 
-    let fix_type = payload[8];
+    let fix_type = payload[28];
     telemetry.gps.fix_type = Some(fix_type);
     telemetry.gps.fix_label = gps_fix_label(fix_type);
-    telemetry.gps.eph = read_u16(payload, 21).and_then(|value| (value != u16::MAX).then_some(value as f64 / 100.0));
-    telemetry.gps.epv = read_u16(payload, 23).and_then(|value| (value != u16::MAX).then_some(value as f64 / 100.0));
+    telemetry.gps.eph = read_u16(payload, 20).and_then(|value| (value != u16::MAX).then_some(value as f64 / 100.0));
+    telemetry.gps.epv = read_u16(payload, 22).and_then(|value| (value != u16::MAX).then_some(value as f64 / 100.0));
     telemetry.gps.satellites = payload.get(29).copied().and_then(|value| (value != u8::MAX).then_some(value));
 
     if let (Some(lat), Some(lon)) = (
-        read_i32(payload, 9).and_then(scaled_coordinate),
-        read_i32(payload, 13).and_then(scaled_coordinate),
+        read_i32(payload, 8).and_then(scaled_coordinate),
+        read_i32(payload, 12).and_then(scaled_coordinate),
     ) {
         telemetry.position.lat = Some(lat);
         telemetry.position.lon = Some(lon);
     }
 
-    telemetry.position.alt_msl = read_i32(payload, 17).map(|value| value as f64 / 1000.0);
-    telemetry.motion.ground_speed = read_u16(payload, 25).and_then(|value| (value != u16::MAX).then_some(value as f64 / 100.0));
-    telemetry.position.ground_course_deg = read_u16(payload, 27).and_then(|value| (value != u16::MAX).then_some(value as f64 / 100.0));
+    telemetry.position.alt_msl = read_i32(payload, 16).map(|value| value as f64 / 1000.0);
+    telemetry.motion.ground_speed = read_u16(payload, 24).and_then(|value| (value != u16::MAX).then_some(value as f64 / 100.0));
+    telemetry.position.ground_course_deg = read_u16(payload, 26).and_then(|value| (value != u16::MAX).then_some(value as f64 / 100.0));
     update_stats(telemetry);
 }
 
@@ -790,11 +963,11 @@ fn update_radio_status(telemetry: &mut TelemetryState, payload: &[u8]) {
         return;
     }
 
-    telemetry.radio.rssi = payload.first().copied();
-    telemetry.radio.rem_rssi = payload.get(1).copied();
-    telemetry.radio.tx_buffer = payload.get(2).copied();
-    telemetry.radio.rx_errors = read_u16(payload, 5);
-    telemetry.radio.fixed = read_u16(payload, 7);
+    telemetry.radio.rx_errors = read_u16(payload, 0);
+    telemetry.radio.fixed = read_u16(payload, 2);
+    telemetry.radio.rssi = payload.get(4).copied();
+    telemetry.radio.rem_rssi = payload.get(5).copied();
+    telemetry.radio.tx_buffer = payload.get(6).copied();
     telemetry.radio.link_quality = telemetry.radio.rssi;
     update_stats(telemetry);
 }
@@ -929,9 +1102,18 @@ fn status_from_parts(telemetry: &TelemetryState, diagnostics: &SerialDiagnostics
         mavlink_packets: telemetry.packet_count,
         last_packet_ms: telemetry.last_packet_at.map(|time| now_ms().saturating_sub(time)),
         raw_bytes: diagnostics.raw_bytes,
+        tx_bytes: diagnostics.tx_bytes,
         parser_errors: diagnostics.parser_errors,
         last_serial_error: diagnostics.last_serial_error.clone(),
+        mavlink_messages: top_mavlink_messages(diagnostics),
     }
+}
+
+fn top_mavlink_messages(diagnostics: &SerialDiagnostics) -> Vec<MavlinkMessageStat> {
+    let mut messages: Vec<_> = diagnostics.message_counts.values().cloned().collect();
+    messages.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.id.cmp(&b.id)));
+    messages.truncate(16);
+    messages
 }
 
 fn emit_status_and_telemetry(app: &AppHandle, state: &DesktopState) -> Result<(), String> {
@@ -1065,6 +1247,42 @@ fn severity_label(severity: u8) -> &'static str {
         7 => "DEBUG",
         _ => "STATUS",
     }
+}
+
+fn mavlink_message_label(message_id: u32) -> String {
+    match message_id {
+        0 => "HEARTBEAT",
+        1 => "SYS_STATUS",
+        24 => "GPS_RAW_INT",
+        30 => "ATTITUDE",
+        33 => "GLOBAL_POSITION_INT",
+        62 => "NAV_CONTROLLER_OUTPUT",
+        65 => "RC_CHANNELS",
+        74 => "VFR_HUD",
+        109 => "RADIO_STATUS",
+        147 => "BATTERY_STATUS",
+        253 => "STATUSTEXT",
+        2 => "SYSTEM_TIME",
+        27 => "RAW_IMU",
+        29 => "SCALED_PRESSURE",
+        32 => "LOCAL_POSITION_NED",
+        36 => "SERVO_OUTPUT_RAW",
+        42 => "MISSION_CURRENT",
+        87 => "POSITION_TARGET_GLOBAL_INT",
+        125 => "POWER_STATUS",
+        136 => "TERRAIN_REPORT",
+        141 => "ALTITUDE",
+        152 => "MEMINFO",
+        163 => "AHRS",
+        165 => "HWSTATUS",
+        168 => "WIND",
+        178 => "AHRS2",
+        193 => "EKF_STATUS_REPORT",
+        241 => "VIBRATION",
+        245 => "EXTENDED_SYS_STATE",
+        _ => return format!("MSG_{message_id}"),
+    }
+    .to_string()
 }
 
 fn scaled_coordinate(raw: i32) -> Option<f64> {

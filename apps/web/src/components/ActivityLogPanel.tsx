@@ -1,12 +1,14 @@
 import { useState } from "react";
+import type { MavlinkMessageStat } from "@uav-ground-control-station/shared";
 import type { ActivityLogEntry } from "../hooks/useTelemetry";
 
 interface ActivityLogPanelProps {
   logs: ActivityLogEntry[];
+  messages: MavlinkMessageStat[];
   onClear: () => void;
 }
 
-export function ActivityLogPanel({ logs, onClear }: ActivityLogPanelProps) {
+export function ActivityLogPanel({ logs, messages, onClear }: ActivityLogPanelProps) {
   const [open, setOpen] = useState(false);
   const latestWarning = logs.find((entry) => entry.level === "warning" || entry.level === "error");
 
@@ -33,7 +35,28 @@ export function ActivityLogPanel({ logs, onClear }: ActivityLogPanelProps) {
       </header>
 
       {open && (
-        <div className="max-h-[260px] space-y-1 overflow-y-auto p-2">
+        <div className="max-h-[320px] space-y-2 overflow-y-auto p-2">
+          <div className="rounded-lg border border-white/5 bg-black/25 p-2">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-[0.18em] text-cyan-200">MAVLink Messages</span>
+              <span className="font-mono text-[11px] text-slate-400">{messages.length} IDs</span>
+            </div>
+            {messages.length === 0 ? (
+              <div className="text-xs text-slate-500">No MAVLink message IDs received yet.</div>
+            ) : (
+              <div className="grid grid-cols-2 gap-1">
+                {messages.map((message) => (
+                  <div key={message.id} className="rounded border border-white/5 bg-white/[0.03] px-2 py-1 font-mono text-[11px]">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-slate-300">{message.id} {message.label}</span>
+                      <span className="text-cyan-200">{message.count.toLocaleString()}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {logs.length === 0 ? (
             <div className="px-2 py-4 text-center text-xs text-slate-500">No activity logged yet.</div>
           ) : (

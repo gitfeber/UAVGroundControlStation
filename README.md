@@ -227,14 +227,36 @@ The dropdown shows every serial device reported by the operating system, includi
 After connecting a port, use the topbar diagnostics:
 
 - `Raw ...B` increases: the selected serial port is producing bytes.
+- `Tx ...B` increases: the desktop app is successfully writing MAVLink wake-up traffic to the port.
 - `Packets` increases: valid MAVLink v1/v2 packets are being parsed.
 - `Raw` stays at `0B`: the selected port is open but not sending data. Check the TX16S USB mode, telemetry settings, cable, driver, or try another COM port.
+- `Tx` increases but `Raw` stays at `0B`: the app is sending GCS heartbeat/stream requests, but the device is not responding on that port.
 - `Raw` increases but `Packets` stays at `0`: the port is sending data, but it is not MAVLink v1/v2 at the selected baud rate. Try `460800`, then `115200`, then `57600`.
 - `Parse errors` increases: bytes are arriving, but they do not look like clean MAVLink frames. This can be a wrong baud rate, another protocol such as CRSF/EdgeTX telemetry, or a non-telemetry USB mode.
 
 Important TX16S note: a USB connection to the radio does not automatically guarantee a MAVLink byte stream. Depending on EdgeTX/ELRS setup, the radio may expose joystick, storage, serial passthrough, CRSF telemetry, or no MAVLink stream at all. For this app, the selected port must output MAVLink v1/v2 bytes.
 
+For direct ArduPilot flight-controller USB connections, the desktop app opens the port as 8N1 with no flow control, sets DTR and RTS, waits briefly, and then writes an initial MAVLink GCS heartbeat. This mirrors the successful PowerShell/.NET serial test pattern and avoids sending extra stream requests before the controller has responded.
+
+The desktop app also keeps sending a MAVLink GCS heartbeat once per second. After packets are received, it periodically sends ArduPilot `REQUEST_DATA_STREAM` messages to refresh telemetry streams.
+
+The desktop app writes the first GCS heartbeat and stream requests synchronously during `connect()`, before the reader thread starts. The desktop status bridge reports outbound wake-up traffic even if the flight controller does not answer. `Tx` should start increasing immediately after connect. If `Tx` increases but `Raw` remains `0B`, the app is writing to the port but the device is not sending bytes back to this process.
+
 The bottom map overlay includes an `Activity Log` panel. Open it while testing a radio connection to see port scans, connection attempts, raw-byte warnings, MAVLink parser warnings, and serial errors without leaving the app.
+
+The `Activity Log` also shows the most frequent MAVLink message IDs received during the current session. Use this to verify which messages the flight controller is actually streaming when the packet counter is increasing but sidebar metrics are still empty.
+
+Parser error diagnostics only count malformed frame parsing now. Normal byte resynchronization when opening a port in the middle of an active MAVLink stream is ignored, because it is expected and not an actual protocol error.
+
+MAVLink payload decoding follows MAVLink wire order, not the display order from XML definitions. This matters for messages such as `GPS_RAW_INT`, `BATTERY_STATUS`, and `RADIO_STATUS`, where fields of the same size are packed before smaller fields.
+
+In desktop mode, the UI listens for native Tauri status events and also polls native status once per second. This keeps packet/message diagnostics fresh while a connection is active and avoids stale `MAVLink live` badges after disconnect.
+
+Desktop mode also polls native telemetry once per second as a fallback. This keeps the sidebar synchronized even if high-rate Tauri telemetry events are dropped or delayed by the WebView.
+
+Telemetry objects from native desktop mode are normalized with frontend defaults before rendering. This prevents a malformed or partial native payload from blanking the whole UI; rendering errors are caught by an in-app error boundary.
+
+If the desktop app shows `Unable to initialize desktop bridge` or a map crash reading `lng` on startup, rebuild and reinstall the latest MSI. Tauri v2 requires capability files in `apps/desktop/src-tauri/capabilities/` so the webview can call native commands and listen for `telemetry`/`status` events. The bundled UI uses `main-capability`; `pnpm dev:desktop` also needs `dev-remote.json` for `http://localhost:5173`.
 
 ## API
 

@@ -66,3 +66,29 @@ export function createEmptyTelemetryState(): TelemetryState {
     }
   };
 }
+
+export function normalizeTelemetryState(input: TelemetryState | null | undefined): TelemetryState {
+  const fallback = createEmptyTelemetryState();
+  const candidate = input ?? fallback;
+  const position =
+    candidate.position && typeof candidate.position === "object"
+      ? { ...fallback.position, ...candidate.position }
+      : fallback.position;
+
+  return {
+    ...fallback,
+    ...candidate,
+    vehicle: { ...fallback.vehicle, ...candidate.vehicle },
+    position,
+    gps: { ...fallback.gps, ...candidate.gps },
+    motion: { ...fallback.motion, ...candidate.motion },
+    battery: { ...fallback.battery, ...candidate.battery },
+    radio: { ...fallback.radio, ...candidate.radio },
+    system: {
+      ...fallback.system,
+      ...candidate.system,
+      statusText: Array.isArray(candidate.system?.statusText) ? candidate.system.statusText : []
+    },
+    stats: { ...fallback.stats, ...candidate.stats }
+  };
+}

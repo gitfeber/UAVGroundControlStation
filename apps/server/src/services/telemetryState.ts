@@ -132,7 +132,7 @@ export class TelemetryStore {
     if (payload.byteLength < 36) return;
 
     const voltages: number[] = [];
-    for (let offset = 5; offset < 25; offset += 2) {
+    for (let offset = 10; offset < 30; offset += 2) {
       const mv = payload.getUint16(offset, true);
       if (mv > 0 && mv !== 65535) {
         voltages.push(mv / 1000);
@@ -140,8 +140,8 @@ export class TelemetryStore {
     }
 
     const totalVoltage = voltages.length > 0 ? voltages.reduce((sum, value) => sum + value, 0) : null;
-    const currentRaw = payload.getInt16(25, true);
-    const consumed = payload.getInt32(27, true);
+    const currentRaw = payload.getInt16(30, true);
+    const consumed = payload.getInt32(0, true);
     const remaining = payload.getInt8(35);
 
     this.setVoltage(totalVoltage);
@@ -153,14 +153,14 @@ export class TelemetryStore {
   updateGpsRawInt(payload: DataView): void {
     if (payload.byteLength < 30) return;
 
-    const fixType = payload.getUint8(8);
-    const lat = scaledCoordinate(payload.getInt32(9, true));
-    const lon = scaledCoordinate(payload.getInt32(13, true));
-    const alt = payload.getInt32(17, true) / 1000;
-    const eph = payload.getUint16(21, true);
-    const epv = payload.getUint16(23, true);
-    const velocity = payload.getUint16(25, true);
-    const cog = payload.getUint16(27, true);
+    const fixType = payload.getUint8(28);
+    const lat = scaledCoordinate(payload.getInt32(8, true));
+    const lon = scaledCoordinate(payload.getInt32(12, true));
+    const alt = payload.getInt32(16, true) / 1000;
+    const eph = payload.getUint16(20, true);
+    const epv = payload.getUint16(22, true);
+    const velocity = payload.getUint16(24, true);
+    const cog = payload.getUint16(26, true);
 
     this.state.gps.fixType = fixType;
     this.state.gps.fixLabel = gpsFixLabel(fixType);
@@ -219,11 +219,11 @@ export class TelemetryStore {
   updateRadioStatus(payload: DataView): void {
     if (payload.byteLength < 9) return;
 
-    this.state.radio.rssi = payload.getUint8(0);
-    this.state.radio.remRssi = payload.getUint8(1);
-    this.state.radio.txBuffer = payload.getUint8(2);
-    this.state.radio.rxErrors = payload.getUint16(5, true);
-    this.state.radio.fixed = payload.getUint16(7, true);
+    this.state.radio.rxErrors = payload.getUint16(0, true);
+    this.state.radio.fixed = payload.getUint16(2, true);
+    this.state.radio.rssi = payload.getUint8(4);
+    this.state.radio.remRssi = payload.getUint8(5);
+    this.state.radio.txBuffer = payload.getUint8(6);
     this.state.radio.linkQuality = this.state.radio.rssi;
     this.updateStats();
   }

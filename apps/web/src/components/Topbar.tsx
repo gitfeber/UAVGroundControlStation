@@ -47,7 +47,7 @@ export function Topbar({
     }
   }, [ports, selectedPath]);
 
-  const mavlinkLive = status.lastPacketMs !== null && status.lastPacketMs < 3000;
+  const mavlinkLive = status.serialConnected && status.lastPacketMs !== null && status.lastPacketMs < 3000;
   const badgeTone = mavlinkLive ? "good" : status.serialConnected ? "warn" : "bad";
   const badgeText = mavlinkLive ? "MAVLink live" : status.serialConnected ? "Serial linked" : "No link";
   const connectPath = selectedPath === manualPortValue ? manualPath.trim() : selectedPath;
@@ -143,6 +143,7 @@ export function Topbar({
         <Badge tone={badgeTone}>{badgeText}</Badge>
         <Badge tone={wsConnected ? "good" : "bad"}>{runtimeMode === "desktop" ? "Native bridge" : wsConnected ? "WS online" : "WS offline"}</Badge>
         <span className="font-mono">Raw {(status.rawBytes ?? 0).toLocaleString()}B</span>
+        <span className="font-mono">Tx {(status.txBytes ?? 0).toLocaleString()}B</span>
         <span className="font-mono">Packets {packetCount.toLocaleString()}</span>
         {(status.parserErrors ?? 0) > 0 && <span className="font-mono text-yellow-200">Parse errors {status.parserErrors}</span>}
         <span className="font-mono">Last {packetAge}</span>

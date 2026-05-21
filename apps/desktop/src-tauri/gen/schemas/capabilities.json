@@ -1,1 +1,1 @@
-{}
+{"dev-remote-capability":{"identifier":"dev-remote-capability","description":"Vite dev server access to the desktop bridge during pnpm dev:desktop","remote":{"urls":["http://localhost:5173","http://127.0.0.1:5173"]},"local":true,"windows":["*"],"permissions":["core:default"]},"main-capability":{"identifier":"main-capability","description":"Bundled UAV Ground Control Station UI and native serial bridge","local":true,"windows":["*"],"permissions":["core:default"]}}

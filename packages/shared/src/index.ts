@@ -16,8 +16,17 @@ export interface BackendStatus {
   mavlinkPackets: number;
   lastPacketMs: number | null;
   rawBytes?: number;
+  txBytes?: number;
   parserErrors?: number;
   lastSerialError?: string | null;
+  mavlinkMessages?: MavlinkMessageStat[];
+}
+
+export interface MavlinkMessageStat {
+  id: number;
+  label: string;
+  count: number;
+  lastSeenAt: number;
 }
 
 export interface LoggingStatus {

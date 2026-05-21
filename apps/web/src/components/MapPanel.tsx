@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import maplibregl, { type GeoJSONSource } from "maplibre-gl";
-import type { Feature, LineString } from "geojson";
+import type { Feature, FeatureCollection, LineString, Point } from "geojson";
 import type { TelemetryState } from "@uav-ground-control-station/shared";
 import type { Coordinate } from "../lib/geo";
+import { isValidLngLat, toMapLngLat } from "../lib/geo";
 import { formatInteger, formatNumber } from "../lib/format";
 
 interface MapPanelProps {
@@ -12,109 +12,144 @@ interface MapPanelProps {
 }
 
 type TrackFeature = Feature<LineString, Record<string, never>>;
+type PointCollection = FeatureCollection<Point, Record<string, never>>;
 
 const fallbackCenter: [number, number] = [10.4515, 51.1657];
 
 export function MapPanel({ telemetry, coordinate, home }: MapPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const droneMarkerRef = useRef<maplibregl.Marker | null>(null);
-  const homeMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const mapRef = useRef<import("maplibre-gl").Map | null>(null);
+  const maplibreRef = useRef<typeof import("maplibre-gl") | null>(null);
   const centeredRef = useRef(false);
+  const [mapReady, setMapReady] = useState(false);
   const [track, setTrack] = useState<[number, number][]>([]);
 
-  const heading = telemetry.position.headingDeg ?? telemetry.position.groundCourseDeg ?? telemetry.motion.yawDeg ?? 0;
+  const droneLngLat = useMemo(() => toMapLngLat(coordinate), [coordinate]);
+  const homeLngLat = useMemo(() => toMapLngLat(home), [home]);
+
+  const heading =
+    telemetry.position.headingDeg ?? telemetry.position.groundCourseDeg ?? telemetry.motion.yawDeg ?? 0;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: mapStyle(),
-      center: fallbackCenter,
-      zoom: 5,
-      attributionControl: false
-    });
+    let disposed = false;
+    let map: import("maplibre-gl").Map | null = null;
 
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
-    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
-    mapRef.current = map;
+    const setup = async () => {
+      const maplibregl = await import("maplibre-gl");
+      if (disposed || !containerRef.current) return;
 
-    map.on("load", () => {
-      map.addSource("track", {
-        type: "geojson",
-        data: trackFeature([])
+      maplibreRef.current = maplibregl;
+      map = new maplibregl.Map({
+        container: containerRef.current,
+        style: mapStyle(),
+        center: fallbackCenter,
+        zoom: 5,
+        attributionControl: false
       });
+      mapRef.current = map;
 
-      map.addLayer({
-        id: "track-line",
-        type: "line",
-        source: "track",
-        paint: {
-          "line-color": "#22d3ee",
-          "line-width": 3,
-          "line-opacity": 0.9
-        }
+      map.on("load", () => {
+        if (!map) return;
+
+        map.addSource("track", { type: "geojson", data: trackFeature([]) });
+        map.addLayer({
+          id: "track-line",
+          type: "line",
+          source: "track",
+          paint: {
+            "line-color": "#22d3ee",
+            "line-width": 3,
+            "line-opacity": 0.9
+          }
+        });
+
+        map.addSource("drone", { type: "geojson", data: emptyPointCollection() });
+        map.addLayer({
+          id: "drone-point",
+          type: "circle",
+          source: "drone",
+          paint: {
+            "circle-radius": 9,
+            "circle-color": "#22d3ee",
+            "circle-stroke-width": 2,
+            "circle-stroke-color": "#0f172a"
+          }
+        });
+
+        map.addSource("home", { type: "geojson", data: emptyPointCollection() });
+        map.addLayer({
+          id: "home-point",
+          type: "circle",
+          source: "home",
+          paint: {
+            "circle-radius": 7,
+            "circle-color": "#fbbf24",
+            "circle-stroke-width": 2,
+            "circle-stroke-color": "#0f172a"
+          }
+        });
+
+        setMapReady(true);
       });
+    };
+
+    setup().catch((error: unknown) => {
+      console.error("Unable to initialize map", error);
     });
 
     return () => {
-      map.remove();
+      disposed = true;
+      setMapReady(false);
+      map?.remove();
       mapRef.current = null;
+      maplibreRef.current = null;
+      centeredRef.current = false;
     };
   }, []);
 
   useEffect(() => {
-    if (!coordinate) return;
-    const next: [number, number] = [coordinate.lon, coordinate.lat];
+    if (!droneLngLat) return;
 
     setTrack((current) => {
       const last = current[current.length - 1];
-      if (last && Math.abs(last[0] - next[0]) < 0.000001 && Math.abs(last[1] - next[1]) < 0.000001) {
+      if (last && Math.abs(last[0] - droneLngLat[0]) < 0.000001 && Math.abs(last[1] - droneLngLat[1]) < 0.000001) {
         return current;
       }
 
-      return [...current, next].slice(-5000);
+      return [...current, droneLngLat].slice(-5000);
     });
-  }, [coordinate]);
+  }, [droneLngLat]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map || !mapReady) return;
 
-    const source = map.getSource("track") as GeoJSONSource | undefined;
-    source?.setData(trackFeature(track));
-  }, [track]);
+    const source = map.getSource("track") as import("maplibre-gl").GeoJSONSource | undefined;
+    source?.setData(trackFeature(sanitizeTrack(track)));
+  }, [mapReady, track]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !coordinate) return;
+    if (!map || !mapReady || !droneLngLat) return;
 
-    if (!droneMarkerRef.current) {
-      droneMarkerRef.current = new maplibregl.Marker({
-        element: droneElement(),
-        rotationAlignment: "map"
-      }).addTo(map);
-    }
-
-    droneMarkerRef.current.setLngLat([coordinate.lon, coordinate.lat]).setRotation(heading);
+    const source = map.getSource("drone") as import("maplibre-gl").GeoJSONSource | undefined;
+    source?.setData(pointCollection(droneLngLat));
 
     if (!centeredRef.current) {
       centeredRef.current = true;
-      map.easeTo({ center: [coordinate.lon, coordinate.lat], zoom: 15, duration: 900 });
+      map.jumpTo({ center: droneLngLat, zoom: 15 });
     }
-  }, [coordinate, heading]);
+  }, [droneLngLat, heading, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !home) return;
+    if (!map || !mapReady || !homeLngLat) return;
 
-    if (!homeMarkerRef.current) {
-      homeMarkerRef.current = new maplibregl.Marker({ element: homeElement() }).addTo(map);
-    }
-
-    homeMarkerRef.current.setLngLat([home.lon, home.lat]);
-  }, [home]);
+    const source = map.getSource("home") as import("maplibre-gl").GeoJSONSource | undefined;
+    source?.setData(pointCollection(homeLngLat));
+  }, [homeLngLat, mapReady]);
 
   const overlay = useMemo(
     () => ({
@@ -133,6 +168,7 @@ export function MapPanel({ telemetry, coordinate, home }: MapPanelProps) {
       <div className="pointer-events-none absolute left-4 top-4 rounded-xl border border-cyan-300/20 bg-black/55 px-4 py-3 font-mono text-xs text-slate-200 shadow-glow backdrop-blur">
         <div className="mb-1 text-[10px] uppercase tracking-[0.22em] text-cyan-200">Drone Overlay</div>
         <div>ALT {formatNumber(overlay.altitude, 1, "m")}</div>
+        <div>HDG {formatNumber(heading, 0, "deg")}</div>
         <div>SPD {formatNumber(overlay.speed, 1, "m/s")}</div>
         <div>MODE {overlay.mode}</div>
         <div>BAT {formatInteger(overlay.battery, "%")}</div>
@@ -145,7 +181,11 @@ export function MapPanel({ telemetry, coordinate, home }: MapPanelProps) {
   );
 }
 
-function mapStyle(): maplibregl.StyleSpecification | string {
+function sanitizeTrack(track: [number, number][]): [number, number][] {
+  return track.filter((point) => isValidLngLat(point[0], point[1]));
+}
+
+function mapStyle(): import("maplibre-gl").StyleSpecification | string {
   const styleUrl = import.meta.env.VITE_MAP_STYLE_URL;
   if (styleUrl) return styleUrl;
 
@@ -184,16 +224,25 @@ function trackFeature(track: [number, number][]): TrackFeature {
   };
 }
 
-function droneElement(): HTMLElement {
-  const element = document.createElement("div");
-  element.className = "drone-marker";
-  element.innerHTML = "<div></div>";
-  return element;
+function pointCollection(lngLat: [number, number]): PointCollection {
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "Point",
+          coordinates: lngLat
+        }
+      }
+    ]
+  };
 }
 
-function homeElement(): HTMLElement {
-  const element = document.createElement("div");
-  element.className = "home-marker";
-  element.textContent = "H";
-  return element;
+function emptyPointCollection(): PointCollection {
+  return {
+    type: "FeatureCollection",
+    features: []
+  };
 }
