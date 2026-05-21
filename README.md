@@ -214,7 +214,7 @@ The UI still provides `Manual path...` for unusual devices, custom mappings, or 
 2. Start the app with `pnpm dev`.
 3. Open `http://localhost:5173`.
 4. Use the serial port dropdown to select the TX16S / USB serial device.
-5. Try baud rate `460800` first. If no MAVLink packets arrive, try `115200` or `57600`.
+5. For a direct flight-controller USB link, try `115200` or `460800` baud. For a TX16S telemetry mirror over USB-VCP, use `420000` baud.
 6. Ensure MAVLink / ELRS telemetry is enabled on the RC link and flight controller.
 7. The topbar should switch to `MAVLink live` when packets are received.
 
@@ -231,7 +231,7 @@ After connecting a port, use the topbar diagnostics:
 - `Packets` increases: valid MAVLink v1/v2 packets are being parsed.
 - `Raw` stays at `0B`: the selected port is open but not sending data. Check the TX16S USB mode, telemetry settings, cable, driver, or try another COM port.
 - `Tx` increases but `Raw` stays at `0B`: the app is sending GCS heartbeat/stream requests, but the device is not responding on that port.
-- `Raw` increases but `Packets` stays at `0`: the port is sending data, but it is not MAVLink v1/v2 at the selected baud rate. Try `460800`, then `115200`, then `57600`.
+- `Raw` increases but `Packets` stays at `0`: the port is sending data, but no MAVLink or CRSF telemetry frames were recognized. For TX16S telem mirror use `420000`; for direct FC USB try `115200` or `460800`.
 - `Parse errors` increases: bytes are arriving, but they do not look like clean MAVLink frames. This can be a wrong baud rate, another protocol such as CRSF/EdgeTX telemetry, or a non-telemetry USB mode.
 
 Important TX16S note: a USB connection to the radio does not automatically guarantee a MAVLink byte stream. Depending on EdgeTX/ELRS setup, the radio may expose joystick, storage, serial passthrough, CRSF telemetry, or no MAVLink stream at all. For this app, the selected port must output MAVLink v1/v2 bytes.
@@ -257,6 +257,20 @@ Desktop mode also polls native telemetry once per second as a fallback. This kee
 Telemetry objects from native desktop mode are normalized with frontend defaults before rendering. This prevents a malformed or partial native payload from blanking the whole UI; rendering errors are caught by an in-app error boundary.
 
 If the desktop app shows `Unable to initialize desktop bridge` or a map crash reading `lng` on startup, rebuild and reinstall the latest MSI. Tauri v2 requires capability files in `apps/desktop/src-tauri/capabilities/` so the webview can call native commands and listen for `telemetry`/`status` events. The bundled UI uses `main-capability`; `pnpm dev:desktop` also needs `dev-remote.json` for `http://localhost:5173`.
+
+### TX16S telemetry mirror (CRSF over USB-VCP)
+
+When the flight controller forwards telemetry to the radio and the TX16S mirrors it to the PC over USB-VCP, UAV Ground Control Station decodes native CRSF frames in addition to MAVLink:
+
+- Use the TX16S telem mirror COM port, not the radio storage/joystick port.
+- Set baud rate to `420000`.
+- The desktop app stays listen-only on that port (no MAVLink wake-up traffic).
+- Decoded CRSF types include GPS, battery, attitude (`0x1E`), flight mode (`0x21`), vario, baro altitude, and link statistics.
+- ArduPilot/ELRS passthrough frames (`0x7A`, `0x80`, `0x3A`) are also scanned for embedded MAVLink.
+
+The Activity Log message list shows CRSF frame types as `CRSF GPS`, `CRSF Attitude`, `CRSF Flight Mode`, and similar entries alongside MAVLink IDs. Roll/pitch come from `CRSF Attitude` (`16414`); flight mode text comes from `CRSF Flight Mode` (`16417`), not from `0x1E`.
+
+At `420000` baud the desktop app treats the stream as CRSF-first: it does not scan the full byte stream for MAVLink sync bytes (that produced false parse errors on TX16S mirrors). MAVLink is only extracted from CRSF passthrough payloads such as `CRSF ELRS Ext` when `0xFE`/`0xFD` markers are present inside the frame.
 
 ## API
 

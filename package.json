@@ -1,6 +1,6 @@
 {
   "name": "uav-ground-control-station",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Local browser-based MAVLink ground control station for UAVs.",
   "type": "module",

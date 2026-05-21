@@ -15,6 +15,8 @@ use std::{
 };
 use tauri::{AppHandle, Emitter, Manager, State};
 
+mod crsf;
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DesktopSerialPortInfo {
@@ -270,11 +272,13 @@ fn connect(request: ConnectRequest, state: State<DesktopState>, app: AppHandle) 
         let mut diagnostics = state.diagnostics.lock().map_err(lock_error)?;
         *diagnostics = SerialDiagnostics::default();
     }
-    let initial_wakeup_bytes = send_gcs_heartbeat(&mut *port, &mut outbound_sequence)
-        .map_err(|error| format!("Failed to write MAVLink wake-up traffic: {error}"))?;
-    {
-        let mut diagnostics = state.diagnostics.lock().map_err(lock_error)?;
-        diagnostics.tx_bytes += initial_wakeup_bytes as u64;
+    if baud_rate != 420_000 {
+        let initial_wakeup_bytes = send_gcs_heartbeat(&mut *port, &mut outbound_sequence)
+            .map_err(|error| format!("Failed to write MAVLink wake-up traffic: {error}"))?;
+        {
+            let mut diagnostics = state.diagnostics.lock().map_err(lock_error)?;
+            diagnostics.tx_bytes += initial_wakeup_bytes as u64;
+        }
     }
 
     *state.stop_reader.lock().map_err(lock_error)? = Some(stop_flag);
@@ -287,6 +291,7 @@ fn connect(request: ConnectRequest, state: State<DesktopState>, app: AppHandle) 
             Arc::clone(&worker_state),
             worker_app.clone(),
             outbound_sequence,
+            baud_rate,
         ) {
             eprintln!("Desktop serial reader stopped: {error}");
         }
@@ -441,8 +446,13 @@ fn serial_reader_loop(
     worker_state: Arc<WorkerState>,
     app: AppHandle,
     initial_sequence: u8,
+    baud_rate: u32,
 ) -> Result<(), String> {
-    let mut parser = MavlinkFrameParser::new();
+    let mut mavlink_parser = MavlinkFrameParser::new();
+    let mut passthrough_mavlink_parser = MavlinkFrameParser::new();
+    let mut crsf_parser = crsf::CrsfFrameParser::new();
+    let listen_only = baud_rate == 420_000;
+    let mut crsf_primary = listen_only;
     let mut read_buffer = [0_u8; 1024];
     let mut last_status_emit = Instant::now() - Duration::from_secs(1);
     let mut last_gcs_heartbeat = Instant::now() - Duration::from_secs(2);
@@ -452,7 +462,7 @@ fn serial_reader_loop(
     while !stop_flag.load(Ordering::SeqCst) {
         let mut status_dirty = false;
 
-        if last_gcs_heartbeat.elapsed() >= Duration::from_secs(1) {
+        if !listen_only && last_gcs_heartbeat.elapsed() >= Duration::from_secs(1) {
             let written = send_gcs_heartbeat(&mut *port, &mut outbound_sequence).map_err(|error| {
                 record_serial_error(&worker_state, &error.to_string());
                 error.to_string()
@@ -462,7 +472,7 @@ fn serial_reader_loop(
             last_gcs_heartbeat = Instant::now();
         }
 
-        if should_request_streams(&worker_state, last_stream_request) {
+        if !listen_only && should_request_streams(&worker_state, last_stream_request) {
             let written = request_ardupilot_streams(&mut *port, &mut outbound_sequence).map_err(|error| {
                 record_serial_error(&worker_state, &error.to_string());
                 error.to_string()
@@ -477,16 +487,28 @@ fn serial_reader_loop(
                 if let Ok(mut diagnostics) = worker_state.diagnostics.lock() {
                     diagnostics.raw_bytes += read as u64;
                 }
-                let frames = parser.push(&read_buffer[..read]);
-                let parser_errors = parser.take_parser_errors();
-                if parser_errors > 0 {
-                    if let Ok(mut diagnostics) = worker_state.diagnostics.lock() {
-                        diagnostics.parser_errors += parser_errors;
-                    }
-                    status_dirty = true;
+                let chunk = &read_buffer[..read];
+                let crsf_frames = crsf_parser.push(chunk);
+                if !crsf_frames.is_empty() {
+                    crsf_primary = true;
                 }
-                for frame in frames {
-                    apply_frame(&worker_state, &app, frame)?;
+
+                for frame in crsf_frames {
+                    apply_crsf_frame(&worker_state, &app, frame, &mut passthrough_mavlink_parser)?;
+                }
+
+                if !crsf_primary {
+                    let mavlink_frames = mavlink_parser.push(chunk);
+                    let mavlink_errors = mavlink_parser.take_parser_errors();
+                    if mavlink_errors > 0 {
+                        if let Ok(mut diagnostics) = worker_state.diagnostics.lock() {
+                            diagnostics.parser_errors += mavlink_errors;
+                        }
+                        status_dirty = true;
+                    }
+                    for frame in mavlink_frames {
+                        apply_frame(&worker_state, &app, frame)?;
+                    }
                 }
                 status_dirty = true;
             }
@@ -594,18 +616,53 @@ fn record_tx_bytes(worker_state: &WorkerState, written: usize) {
 
 fn record_message_stat(worker_state: &WorkerState, message_id: u32) {
     if let Ok(mut diagnostics) = worker_state.diagnostics.lock() {
+        let label = if message_id >= crsf::CRSF_STAT_BASE {
+            crsf::crsf_message_label((message_id - crsf::CRSF_STAT_BASE) as u8)
+        } else {
+            mavlink_message_label(message_id)
+        };
         let entry = diagnostics
             .message_counts
             .entry(message_id)
             .or_insert_with(|| MavlinkMessageStat {
                 id: message_id,
-                label: mavlink_message_label(message_id),
+                label: label.clone(),
                 count: 0,
                 last_seen_at: now_ms(),
             });
+        entry.label = label;
         entry.count += 1;
         entry.last_seen_at = now_ms();
     }
+}
+
+fn apply_crsf_frame(
+    worker_state: &WorkerState,
+    app: &AppHandle,
+    frame: crsf::CrsfFrame,
+    passthrough_mavlink_parser: &mut MavlinkFrameParser,
+) -> Result<(), String> {
+    record_message_stat(worker_state, crsf::crsf_message_id(frame.frame_type));
+
+    {
+        let mut telemetry = worker_state.telemetry.lock().map_err(lock_error)?;
+        crsf::apply_crsf_frame(&mut telemetry, &frame);
+    }
+
+    if !frame.payload.is_empty() && crsf::is_mavlink_passthrough(frame.frame_type) {
+        for mavlink_frame in passthrough_mavlink_parser.push(&frame.payload) {
+            apply_frame(worker_state, app, mavlink_frame)?;
+        }
+    }
+
+    let telemetry = worker_state.telemetry.lock().map_err(lock_error)?.clone();
+    write_log_if_active(worker_state, &telemetry)?;
+    let _ = app.emit("telemetry", &telemetry);
+    if let Ok(diagnostics) = worker_state.diagnostics.lock() {
+        let _ = app.emit("status", status_from_parts(&telemetry, &diagnostics));
+    }
+
+    Ok(())
 }
 
 fn emit_worker_status(worker_state: &WorkerState, app: &AppHandle) -> Result<(), String> {
@@ -615,11 +672,26 @@ fn emit_worker_status(worker_state: &WorkerState, app: &AppHandle) -> Result<(),
     Ok(())
 }
 
+fn is_supported_mavlink_message(message_id: u32) -> bool {
+    matches!(
+        message_id,
+        0 | 1 | 2 | 24 | 27 | 29 | 30 | 32 | 33 | 36 | 42 | 62 | 65 | 74 | 87 | 109 | 125 | 136 | 141 | 147 | 152
+            | 163 | 165 | 168 | 178 | 193 | 241 | 245 | 253
+    )
+}
+
 fn apply_frame(worker_state: &WorkerState, app: &AppHandle, frame: MavlinkFrame) -> Result<(), String> {
+    if !is_supported_mavlink_message(frame.message_id) {
+        return Ok(());
+    }
+
     let telemetry = {
         record_message_stat(worker_state, frame.message_id);
         let mut telemetry = worker_state.telemetry.lock().map_err(lock_error)?;
         mark_packet(&mut telemetry, frame.system_id, frame.component_id);
+        if telemetry.vehicle.r#type == "TX16S CRSF" {
+            telemetry.vehicle.r#type = "ArduPilot".to_string();
+        }
 
         match frame.message_id {
             0 => update_heartbeat(&mut telemetry, &frame.payload),
@@ -658,6 +730,17 @@ impl MavlinkFrameParser {
 
     fn push(&mut self, chunk: &[u8]) -> Vec<MavlinkFrame> {
         self.buffer.extend_from_slice(chunk);
+        self.drain_frames()
+    }
+
+    fn push_isolated(&mut self, chunk: &[u8]) -> Vec<MavlinkFrame> {
+        self.buffer.clear();
+        self.parser_errors = 0;
+        self.buffer.extend_from_slice(chunk);
+        self.drain_frames()
+    }
+
+    fn drain_frames(&mut self) -> Vec<MavlinkFrame> {
         let mut frames = Vec::new();
 
         loop {
@@ -676,7 +759,9 @@ impl MavlinkFrameParser {
 
             let frame: Vec<u8> = self.buffer.drain(0..frame_len).collect();
             if let Some(parsed) = parse_frame(&frame) {
-                frames.push(parsed);
+                if is_supported_mavlink_message(parsed.message_id) {
+                    frames.push(parsed);
+                }
             } else {
                 self.parser_errors += 1;
             }
@@ -821,7 +906,7 @@ fn initial_telemetry() -> TelemetryState {
     }
 }
 
-fn mark_packet(telemetry: &mut TelemetryState, system_id: u8, component_id: u8) {
+pub(crate) fn mark_packet(telemetry: &mut TelemetryState, system_id: u8, component_id: u8) {
     telemetry.connected = true;
     telemetry.last_packet_at = Some(now_ms());
     telemetry.packet_count += 1;
@@ -1036,7 +1121,7 @@ fn set_current(telemetry: &mut TelemetryState, current: Option<f64>) {
     telemetry.stats.max_current = max_optional(telemetry.stats.max_current, current);
 }
 
-fn update_stats(telemetry: &mut TelemetryState) {
+pub(crate) fn update_stats(telemetry: &mut TelemetryState) {
     telemetry.stats.max_altitude = max_optional(
         telemetry.stats.max_altitude,
         telemetry.position.relative_alt.or(telemetry.position.alt_msl),
@@ -1165,7 +1250,7 @@ fn lock_error<T>(_: std::sync::PoisonError<T>) -> String {
     "Desktop state lock failed.".to_string()
 }
 
-fn mav_type_label(vehicle_type: u8) -> String {
+pub(crate) fn mav_type_label(vehicle_type: u8) -> String {
     match vehicle_type {
         0 => "Generic",
         1 => "Fixed Wing",
@@ -1184,7 +1269,7 @@ fn mav_type_label(vehicle_type: u8) -> String {
     .to_string()
 }
 
-fn flight_mode_label(vehicle_type: u8, custom_mode: u32) -> String {
+pub(crate) fn flight_mode_label(vehicle_type: u8, custom_mode: u32) -> String {
     if vehicle_type == 1 || vehicle_type == 19 {
         return match custom_mode {
             0 => "MANUAL",

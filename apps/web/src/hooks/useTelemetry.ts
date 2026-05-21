@@ -135,11 +135,11 @@ export function useTelemetry() {
     setError(null);
     activeConnectionRef.current = {
       path: request.path,
-      baudRate: request.baudRate ?? 460800,
+      baudRate: request.baudRate ?? 420000,
       startedAt: Date.now()
     };
     warningStateRef.current = { noRawBytes: false, noMavlinkPackets: false };
-    addLog("info", `Opening ${request.path} at ${request.baudRate ?? 460800} baud.`);
+    addLog("info", `Opening ${request.path} at ${request.baudRate ?? 420000} baud.`);
 
     try {
       if (mode === "desktop") {
@@ -231,7 +231,11 @@ export function useTelemetry() {
       addLog("success", `MAVLink packets detected (${status.mavlinkPackets.toLocaleString()}).`);
     }
 
-    if (status.serialConnected && (status.parserErrors ?? 0) > (previous.parserErrors ?? 0)) {
+    if (
+      status.serialConnected &&
+      (status.parserErrors ?? 0) > (previous.parserErrors ?? 0) &&
+      (status.parserErrors ?? 0) > (status.mavlinkPackets ?? 0) * 4
+    ) {
       addLog("warning", `Parser errors increased to ${status.parserErrors}. Check baud rate or protocol.`);
     }
 
@@ -267,7 +271,7 @@ export function useTelemetry() {
         warningStateRef.current.noMavlinkPackets = true;
         addLog(
           "warning",
-          `Serial bytes are arriving on ${connection.path}, but no MAVLink packets were parsed. Try 460800, 115200, or 57600 baud, and verify the port outputs MAVLink v1/v2 rather than joystick/storage/CRSF data.`
+          `Serial bytes are arriving on ${connection.path}, but no telemetry frames were parsed. For TX16S telem mirror use 420000 baud; for direct FC USB try 115200 or 460800.`
         );
       }
     }, 1000);

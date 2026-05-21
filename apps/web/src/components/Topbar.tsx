@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { BackendStatus, LoggingStatus, SerialPortInfo } from "@uav-ground-control-station/shared";
 import { Badge } from "./Panel";
 
-const baudRates = [57600, 115200, 460800];
+const baudRates = [57600, 115200, 420000, 460800];
 const manualPortValue = "__manual__";
 
 interface TopbarProps {
@@ -38,7 +38,7 @@ export function Topbar({
 }: TopbarProps) {
   const [selectedPath, setSelectedPath] = useState("");
   const [manualPath, setManualPath] = useState("");
-  const [baudRate, setBaudRate] = useState(460800);
+  const [baudRate, setBaudRate] = useState(420000);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
