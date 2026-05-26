@@ -38,11 +38,11 @@ export function ActivityLogPanel({ logs, messages, onClear }: ActivityLogPanelPr
         <div className="max-h-[320px] space-y-2 overflow-y-auto p-2">
           <div className="rounded-lg border border-white/5 bg-black/25 p-2">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-[10px] uppercase tracking-[0.18em] text-cyan-200">MAVLink Messages</span>
+              <span className="text-[10px] uppercase tracking-[0.18em] text-cyan-200">Frame message stats</span>
               <span className="font-mono text-[11px] text-slate-400">{messages.length} IDs</span>
             </div>
             {messages.length === 0 ? (
-              <div className="text-xs text-slate-500">No MAVLink message IDs received yet.</div>
+              <div className="text-xs text-slate-500">No frame message IDs received yet.</div>
             ) : (
               <div className="grid grid-cols-2 gap-1">
                 {messages.map((message) => (

@@ -504,7 +504,6 @@ fn serial_reader_loop(
                         if let Ok(mut diagnostics) = worker_state.diagnostics.lock() {
                             diagnostics.parser_errors += mavlink_errors;
                         }
-                        status_dirty = true;
                     }
                     for frame in mavlink_frames {
                         apply_frame(&worker_state, &app, frame)?;
@@ -733,6 +732,7 @@ impl MavlinkFrameParser {
         self.drain_frames()
     }
 
+    #[cfg(test)]
     fn push_isolated(&mut self, chunk: &[u8]) -> Vec<MavlinkFrame> {
         self.buffer.clear();
         self.parser_errors = 0;
@@ -1428,4 +1428,30 @@ fn read_i32(payload: &[u8], offset: usize) -> Option<i32> {
 
 fn read_f32(payload: &[u8], offset: usize) -> Option<f32> {
     Some(f32::from_le_bytes(payload.get(offset..offset + 4)?.try_into().ok()?))
+}
+
+#[cfg(test)]
+mod parser_tests {
+    use super::*;
+
+    #[test]
+    fn parses_mavlink_v1_heartbeat() {
+        let mut sequence = 0_u8;
+        let frame = mavlink_v1_packet(0, &[0; 9], 50, &mut sequence);
+        let mut parser = MavlinkFrameParser::new();
+        let frames = parser.push_isolated(&frame);
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].message_id, 0);
+        assert_eq!(frames[0].payload.len(), 9);
+    }
+
+    #[test]
+    fn mavlink_parser_ignores_unsupported_message_id() {
+        let mut sequence = 0_u8;
+        let frame = mavlink_v1_packet(88, &[0; 9], 0, &mut sequence);
+        let mut parser = MavlinkFrameParser::new();
+        let frames = parser.push_isolated(&frame);
+        assert!(frames.is_empty());
+        assert_eq!(parser.take_parser_errors(), 0);
+    }
 }

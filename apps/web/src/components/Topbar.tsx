@@ -47,9 +47,9 @@ export function Topbar({
     }
   }, [ports, selectedPath]);
 
-  const mavlinkLive = status.serialConnected && status.lastPacketMs !== null && status.lastPacketMs < 3000;
-  const badgeTone = mavlinkLive ? "good" : status.serialConnected ? "warn" : "bad";
-  const badgeText = mavlinkLive ? "MAVLink live" : status.serialConnected ? "Serial linked" : "No link";
+  const telemetryLive = status.serialConnected && status.lastPacketMs !== null && status.lastPacketMs < 3000;
+  const badgeTone = telemetryLive ? "good" : status.serialConnected ? "warn" : "bad";
+  const badgeText = telemetryLive ? "Telemetry live" : status.serialConnected ? "Serial linked" : "No link";
   const connectPath = selectedPath === manualPortValue ? manualPath.trim() : selectedPath;
 
   async function run(action: () => Promise<void>) {

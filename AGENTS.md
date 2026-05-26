@@ -7,7 +7,7 @@ This repository is `uav-ground-control-station`, a slim local Ground Control Sta
 - Keep the MVP focused on a single local dashboard: no mission planning, parameter editor, fleet management, or report system unless explicitly requested.
 - Use TypeScript throughout the monorepo.
 - Keep shared API and telemetry contracts in `packages/shared`.
-- Hardware access belongs in `apps/server`; the browser app must stay visualization/control-only.
+- Hardware access belongs in `apps/desktop` for production TX16S/CRSF/COM links and in `apps/server` for the browser dev/fallback path; `apps/web` stays visualization/control-only.
 - Update `README.md` whenever a change affects setup, commands, architecture, APIs, telemetry behavior, environment variables, or operator workflow.
 - Bump the application version for every functional app change; keep `package.json`, `apps/desktop/package.json`, `apps/desktop/src-tauri/tauri.conf.json`, and `apps/desktop/src-tauri/Cargo.toml` in sync so MSI upgrades install over older versions.
 - On Windows development machines, run normal repo maintenance commands through WSL.
@@ -18,16 +18,17 @@ This repository is `uav-ground-control-station`, a slim local Ground Control Sta
 
 ## Architecture
 
-- Frontend: `apps/web`, React + Vite + Tailwind + MapLibre GL JS.
-- Backend: `apps/server`, Fastify + WebSocket + `serialport`.
-- Desktop: `apps/desktop`, Tauri v2 with native Rust serial access and the same React UI.
+- Frontend: `apps/web`, React + Vite + Tailwind + MapLibre GL JS (shared by both runtimes).
+- Desktop (canonical): `apps/desktop`, Tauri v2 with native Rust serial, CRSF + MAVLink parsers, GCS wake-up.
+- Backend (dev/fallback): `apps/server`, Fastify + WebSocket + `serialport`, MAVLink-only.
 - Shared types: `packages/shared`.
-- Backend runs on `http://localhost:3001`.
-- Frontend runs on `http://localhost:5173`.
+- Domain glossary: `CONTEXT.md`. Architectural decisions: `docs/adr/`.
+- Browser dev: backend `http://localhost:3001`, frontend `http://localhost:5173`.
+- Desktop dev: `pnpm dev:desktop` (embedded bridge; same UI).
 
 ## Telemetry Expectations
 
-- Normalize incoming MAVLink data into `TelemetryState`.
+- Normalize incoming link data (CRSF and/or MAVLink) into `TelemetryState`.
 - Preserve the shared `TelemetryState` shape unless the frontend and README are updated together.
 - Keep WebSocket payloads JSON and small enough for local real-time display.
 - Maintain the track limit of 5000 points in the frontend unless there is a deliberate performance change.

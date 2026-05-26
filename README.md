@@ -24,7 +24,11 @@ apps/
 packages/
   shared/        Shared TypeScript API and telemetry types
 logs/            Optional local JSONL flight logs
+docs/adr/        Architecture decision records
+CONTEXT.md       Domain glossary (telemetry link, runtime mode, frames)
 ```
+
+**Runtime:** For TX16S / CRSF on Windows `COM*`, use `pnpm dev:desktop` (canonical). `pnpm dev` (browser + Node) is MAVLink-only dev/fallback — see [ADR 0001](docs/adr/0001-dual-runtime-desktop-canonical.md).
 
 ## Versioning
 

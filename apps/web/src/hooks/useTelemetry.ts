@@ -224,11 +224,11 @@ export function useTelemetry() {
     }
 
     if ((previous.txBytes ?? 0) === 0 && (status.txBytes ?? 0) > 0) {
-      addLog("info", `Outbound MAVLink wake-up bytes sent (${status.txBytes?.toLocaleString()}B).`);
+      addLog("info", `Outbound wake-up bytes sent (${status.txBytes?.toLocaleString()}B).`);
     }
 
     if (previous.mavlinkPackets === 0 && status.mavlinkPackets > 0) {
-      addLog("success", `MAVLink packets detected (${status.mavlinkPackets.toLocaleString()}).`);
+      addLog("success", `Telemetry frames detected (${status.mavlinkPackets.toLocaleString()}).`);
     }
 
     if (

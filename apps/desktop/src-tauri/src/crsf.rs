@@ -83,7 +83,7 @@ fn parse_frame(frame: &[u8]) -> Option<CrsfFrame> {
     }
 
     let frame_type = frame[2];
-    let payload_len = len.saturating_sub(2);
+    let _payload_len = len.saturating_sub(2);
     let payload = frame.get(3..1 + len)?.to_vec();
     let received_crc = *frame.get(1 + len)?;
     let crc_input = frame.get(2..1 + len)?;
@@ -390,4 +390,45 @@ fn read_u24_be(data: &[u8], offset: usize) -> Option<u32> {
 fn read_u32_be(data: &[u8], offset: usize) -> Option<u32> {
     let bytes = data.get(offset..offset + 4)?;
     Some(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn build_frame(addr: u8, frame_type: u8, payload: &[u8]) -> Vec<u8> {
+        let len_byte = (payload.len() + 2) as u8;
+        let mut crc_input = vec![frame_type];
+        crc_input.extend_from_slice(payload);
+        let crc = crc8_dvb_s2(&crc_input);
+        let mut frame = vec![addr, len_byte, frame_type];
+        frame.extend_from_slice(payload);
+        frame.push(crc);
+        frame
+    }
+
+    #[test]
+    fn parses_valid_crsf_heartbeat_frame() {
+        let bytes = build_frame(0xC8, 0x0B, &[]);
+        let mut parser = CrsfFrameParser::new();
+        let frames = parser.push(&bytes);
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].frame_type, 0x0B);
+        assert!(frames[0].payload.is_empty());
+    }
+
+    #[test]
+    fn rejects_crsf_frame_with_bad_crc() {
+        let mut bytes = build_frame(0xEA, 0x08, &[0xFF; 8]);
+        if let Some(last) = bytes.last_mut() {
+            *last ^= 0x55;
+        }
+        let mut parser = CrsfFrameParser::new();
+        assert!(parser.push(&bytes).is_empty());
+    }
+
+    #[test]
+    fn crsf_message_label_maps_battery_type() {
+        assert_eq!(crsf_message_label(0x08), "CRSF Battery");
+    }
 }

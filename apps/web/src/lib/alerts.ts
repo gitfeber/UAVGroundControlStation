@@ -10,7 +10,7 @@ export function getAlerts(telemetry: TelemetryState, status: BackendStatus): Ale
   const packetAge = telemetry.lastPacketAt === null ? Number.POSITIVE_INFINITY : Date.now() - telemetry.lastPacketAt;
 
   if (packetAge > 3000) {
-    alerts.push({ level: "critical", label: "No MAVLink > 3s" });
+    alerts.push({ level: "critical", label: "No telemetry > 3s" });
   }
 
   if ((telemetry.battery.remainingPercent ?? 100) < 25) {
@@ -39,7 +39,7 @@ export function getAlerts(telemetry: TelemetryState, status: BackendStatus): Ale
   }
 
   if (status.serialConnected && telemetry.lastPacketAt === null) {
-    alerts.push({ level: "warning", label: "Serial connected, waiting for MAVLink" });
+    alerts.push({ level: "warning", label: "Serial connected, waiting for telemetry" });
   }
 
   return alerts;
