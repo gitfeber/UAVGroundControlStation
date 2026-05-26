@@ -167,6 +167,27 @@ On Windows, run `pnpm dev:desktop` from a native Windows terminal such as PowerS
 
 The Windows bundle uses `apps/desktop/src-tauri/icons/icon.ico` for the executable resource icon.
 
+`pnpm build:desktop` produces two Windows installers:
+
+| Artifact | Path | Use |
+| --- | --- | --- |
+| NSIS setup (recommended for operators) | `apps/desktop/src-tauri/target/release/bundle/nsis/UAV Ground Control Station_<version>_x64-setup.exe` | Branded wizard; best default for manual installs |
+| MSI (enterprise/GPO) | `apps/desktop/src-tauri/target/release/bundle/msi/UAV Ground Control Station_<version>_x64_en-US.msi` | Windows Installer UI; use when IT needs MSI |
+
+NSIS branding uses `bundle.windows.nsis` (`header.bmp`, `sidebar.bmp`). MSI branding uses `bundle.windows.wix` (`wix-banner.bmp`, `wix-dialog.bmp`). All live under `apps/desktop/src-tauri/installer/`. Regenerate after visual changes (PowerShell on Windows, preferred):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File apps/desktop/src-tauri/installer/generate-assets.ps1
+```
+
+Fallback:
+
+```bash
+python apps/desktop/src-tauri/installer/generate-assets.py
+```
+
+If you open the `.msi` and see **Change / Repair / Remove**, that is normal Windows Installer maintenance mode for an existing install. The red stretched icon sidebar was the default MSI artwork before WiX bitmaps were configured. For the NSIS experience, run the `*-setup.exe` from `bundle/nsis/`, not the `.msi`.
+
 To build an installer or native desktop bundle:
 
 ```bash

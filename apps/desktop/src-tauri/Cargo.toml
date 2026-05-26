@@ -1,6 +1,6 @@
 [package]
 name = "uav-ground-control-station"
-version = "0.1.5"
+version = "0.1.6"
 description = "Native desktop shell for UAV Ground Control Station"
 authors = [""]
 edition = "2021"
