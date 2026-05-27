@@ -46,7 +46,7 @@ function Draw-BrandedPanel {
     $g.DrawString('UAV', $fontTitle, $brushCyan, $x, [int]($h * 0.14))
     $g.DrawString('GROUND', $fontSub, $brushText, $x, [int]($h * 0.28))
     $g.DrawString('CONTROL', $fontSub, $brushText, $x, [int]($h * 0.36))
-    $g.DrawString('', $fontMeta, $brushDim, $x, [int]($h * 0.52))
+    $g.DrawString('STATION', $fontMeta, $brushDim, $x, [int]($h * 0.52))
     $g.DrawString('LOCAL GCS', $fontMeta, $brushDim, $x, [int]($h * 0.58))
 }
 
@@ -59,7 +59,7 @@ function Draw-Header {
 
     $fontTitle = [System.Drawing.Font]::new('Segoe UI', 11, [System.Drawing.FontStyle]::Bold)
     $fontSub = [System.Drawing.Font]::new('Segoe UI', 8, [System.Drawing.FontStyle]::Regular)
-    $g.DrawString('UAV', $fontTitle, (New-Object System.Drawing.SolidBrush $text), 10, 10)
+    $g.DrawString('UAV GCS', $fontTitle, (New-Object System.Drawing.SolidBrush $text), 10, 10)
     $g.DrawString('GROUND CONTROL', $fontSub, (New-Object System.Drawing.SolidBrush $cyan), 10, 32)
 
     Save-Bmp $ctx.Bitmap (Join-Path $dir 'header.bmp')
@@ -83,7 +83,7 @@ function Draw-WixBanner {
 
     $fontTitle = [System.Drawing.Font]::new('Segoe UI', 14, [System.Drawing.FontStyle]::Bold)
     $fontSub = [System.Drawing.Font]::new('Segoe UI', 10, [System.Drawing.FontStyle]::Regular)
-    $g.DrawString('UAV GROUND CONTROL STATION', $fontTitle, (New-Object System.Drawing.SolidBrush $text), 16, 10)
+    $g.DrawString('UAV Ground Control Station', $fontTitle, (New-Object System.Drawing.SolidBrush $text), 16, 10)
     $g.DrawString('Local UAV GCS', $fontSub, (New-Object System.Drawing.SolidBrush $cyan), 16, 34)
 
     Save-Bmp $ctx.Bitmap (Join-Path $dir 'wix-banner.bmp')

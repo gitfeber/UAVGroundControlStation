@@ -64,7 +64,7 @@ export function Topbar({
   return (
     <header className="z-20 flex h-16 items-center gap-3 border-b border-cyan-300/10 bg-slate-950/92 px-4 shadow-glow backdrop-blur">
       <div className="min-w-[230px]">
-        <div className="text-[11px] uppercase tracking-[0.32em] text-cyan-300/80">UAV</div>
+        <div className="text-[11px] uppercase tracking-[0.32em] text-cyan-300/80">Local GCS</div>
         <h1 className="text-lg font-semibold tracking-wide text-slate-50">UAV Ground Control Station</h1>
       </div>
 
