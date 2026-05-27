@@ -88,17 +88,38 @@ pnpm install
 
 ### Desktop (recommended)
 
+**Pre-built installers** (no local Rust toolchain required):
+
+1. Open [GitHub Releases](https://github.com/gitfeber/UAVGroundControlStation/releases) for this repository.
+2. Download the asset for your OS (Windows `.msi` / setup `.exe`, or Linux `.deb` / `.AppImage`).
+3. Install and launch **UAV Ground Control Station**.
+
+New releases are published when a version tag such as `v0.1.8` is pushed (see [`.github/workflows/release.yml`](.github/workflows/release.yml)). Each push to `main` also produces a **Linux** build artifact in the [Actions](https://github.com/gitfeber/UAVGroundControlStation/actions) tab (job `desktop-build`, ~90-day retention).
+
+**From source:**
+
 ```bash
 pnpm dev:desktop
 ```
 
-Release build (MSI/installer):
+Release build (local MSI/installer):
 
 ```bash
 pnpm build:desktop
 ```
 
 Artifacts: `apps/desktop/src-tauri/target/release/bundle/`
+
+**Maintainers — publish a release:**
+
+```bash
+git tag v0.1.8
+git push origin v0.1.8
+```
+
+The release workflow builds **Windows** and **Linux** installers and attaches them to the GitHub release (no macOS builds in CI). You can also trigger it manually under **Actions → Release → Run workflow**.
+
+If the release job fails with *Resource not accessible by integration*, enable **Settings → Actions → General → Workflow permissions → Read and write permissions** for the repository.
 
 ### Browser development (MAVLink fallback)
 

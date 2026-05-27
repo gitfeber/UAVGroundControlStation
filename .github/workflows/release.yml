@@ -1,9 +1,10 @@
-name: CI
+name: Release
 
 on:
+  workflow_dispatch:
   push:
-    branches: [main, master]
-  pull_request:
+    tags:
+      - "v*"
 
 jobs:
   node:
@@ -40,21 +41,23 @@ jobs:
             patchelf
       - run: cargo test
 
-  desktop-build:
+  publish-tauri:
     needs: [node, rust]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+          - platform: windows-latest
+
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
+
       - name: Install Linux build dependencies
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -63,15 +66,40 @@ jobs:
             librsvg2-dev \
             libudev-dev \
             patchelf
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri -> target
+
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build:desktop
-      - name: Upload Linux desktop bundles
-        uses: actions/upload-artifact@v4
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: desktop-linux-${{ github.sha }}
-          path: apps/desktop/src-tauri/target/release/bundle/**/*
-          if-no-files-found: error
+          projectPath: apps/desktop
+          tagName: v__VERSION__
+          releaseName: UAV Ground Control Station v__VERSION__
+          releaseBody: |
+            Desktop installers for Windows and Linux.
+
+            | Platform | Typical artifact |
+            |----------|------------------|
+            | Windows | `.msi` (WiX) and/or `.exe` (NSIS setup) |
+            | Linux | `.deb`, `.AppImage`, and/or `.rpm` |
+
+            Pick the installer for your OS, run it, then connect your serial link from the dashboard.
+          releaseDraft: false
+          prerelease: false
