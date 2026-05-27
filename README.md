@@ -165,7 +165,13 @@ The Tauri desktop app embeds the same React UI, but serial-port discovery and MA
 
 On Windows, run `pnpm dev:desktop` from a native Windows terminal such as PowerShell, Windows Terminal, or CMD with Node.js, pnpm, Rust, and the Tauri prerequisites installed on Windows. If you start the desktop app from WSL, it is a Linux process and will not see Windows `COM` ports directly.
 
-The Windows bundle uses `apps/desktop/src-tauri/icons/icon.ico` for the executable resource icon.
+App icons live in `apps/desktop/src-tauri/icons/`. Master artwork: `icon.png` (copied to `icon_original.png` when regenerating). Regenerate PNG/ICO/ICNS after logo changes:
+
+```powershell
+apps/desktop/src-tauri/icons/generate-icons.ps1
+```
+
+The Windows bundle uses `icon.ico` for the executable and installer resource icons.
 
 `pnpm build:desktop` produces two Windows installers:
 
