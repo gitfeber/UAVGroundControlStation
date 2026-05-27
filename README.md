@@ -94,7 +94,7 @@ pnpm install
 2. Download the asset for your OS (Windows `.msi` / setup `.exe`, or Linux `.deb` / `.AppImage`).
 3. Install and launch **UAV Ground Control Station**.
 
-New releases are published when a version tag such as `v0.1.8` is pushed (see [`.github/workflows/release.yml`](.github/workflows/release.yml)). Each push to `main` also produces a **Linux** build artifact in the [Actions](https://github.com/gitfeber/UAVGroundControlStation/actions) tab (job `desktop-build`, ~90-day retention).
+Each push to `main` runs tests first; if they pass, CI publishes a **prerelease** with Windows and Linux installers (tag like `v0.1.8-build.42`, job `publish` in [`.github/workflows/ci.yml`](.github/workflows/ci.yml)). **Stable** releases use a version tag such as `v0.1.8` (see [`.github/workflows/release.yml`](.github/workflows/release.yml)).
 
 **From source:**
 
@@ -110,7 +110,9 @@ pnpm build:desktop
 
 Artifacts: `apps/desktop/src-tauri/target/release/bundle/`
 
-**Maintainers — publish a release:**
+**Maintainers — stable release (optional):**
+
+Automatic prereleases happen on every green `main` push. For a non-prerelease “stable” release:
 
 ```bash
 git tag v0.1.8

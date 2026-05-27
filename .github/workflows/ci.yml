@@ -5,15 +5,18 @@ on:
     branches: [main, master]
   pull_request:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   node:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.33.4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: pnpm
@@ -27,7 +30,7 @@ jobs:
       run:
         working-directory: apps/desktop/src-tauri
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Linux build dependencies
         run: |
@@ -40,21 +43,23 @@ jobs:
             patchelf
       - run: cargo test
 
-  desktop-build:
+  publish:
     needs: [node, rust]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+          - platform: windows-latest
+    runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v6
+
       - name: Install Linux build dependencies
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -63,15 +68,41 @@ jobs:
             librsvg2-dev \
             libudev-dev \
             patchelf
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri -> target
+
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build:desktop
-      - name: Upload Linux desktop bundles
-        uses: actions/upload-artifact@v4
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: desktop-linux-${{ github.sha }}
-          path: apps/desktop/src-tauri/target/release/bundle/**/*
-          if-no-files-found: error
+          projectPath: apps/desktop
+          tauriScript: pnpm exec tauri
+          tagName: v__VERSION__-build.${{ github.run_number }}
+          releaseName: UAV Ground Control Station v__VERSION__ (build ${{ github.run_number }})
+          releaseBody: |
+            Automated prerelease from `main` after CI passed (commit `${{ github.sha }}`).
+
+            | Platform | Typical artifact |
+            |----------|------------------|
+            | Windows | `.msi` (WiX) and/or `.exe` (NSIS setup) |
+            | Linux | `.deb`, `.AppImage`, and/or `.rpm` |
+
+            For a stable release, push a version tag such as `v0.1.8`.
+          releaseDraft: false
+          prerelease: true
