@@ -36,6 +36,16 @@ _Avoid_: MAVLink message (in operator-facing UI copy)
 Outbound serial bytes the GCS sends after connect so a silent FC or radio mirror starts streaming (desktop sends MAVLink GCS heartbeats / requests; browser server may send none).
 _Avoid_: MAVLink wake-up (in operator-facing UI copy)
 
+### Operator UI
+
+**Attitude HUD**:
+The map-mounted primary flight display (`HudOverlay`) — pitch ladder, roll scale, heading tape, and key motion/vehicle fields from **TelemetryState**.
+_Avoid_: Artificial horizon (description only), HUD overlay, Drone overlay (retired map text box)
+
+**Telemetry instruments**:
+Sidebar **Inst** view — compact SVG gauges (compass, battery, radio, tapes, GPS badge, attitude ball) from **TelemetryState** without new backend fields.
+_Avoid_: Widget panel, gauge mode
+
 ## Flagged ambiguities
 
 | Ambiguous | Canonical | Notes |

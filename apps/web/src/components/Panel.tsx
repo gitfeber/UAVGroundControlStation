@@ -1,17 +1,28 @@
-import type { PropsWithChildren, ReactNode } from "react";
+import type { DragEvent, PropsWithChildren, ReactNode } from "react";
 
 interface PanelProps extends PropsWithChildren {
   title?: string;
   action?: ReactNode;
   className?: string;
+  sortable?: boolean;
+  onDragStart?: (event: DragEvent) => void;
+  onDragEnd?: () => void;
 }
 
-export function Panel({ title, action, className = "", children }: PanelProps) {
+export function Panel({ title, action, className = "", sortable = false, onDragStart, onDragEnd, children }: PanelProps) {
   return (
     <section className={`rounded-xl border border-line bg-panel shadow-glow backdrop-blur ${className}`}>
       {(title || action) && (
-        <header className="flex items-center justify-between border-b border-line px-3 py-2">
-          {title && <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">{title}</h2>}
+        <header
+          className={`flex items-center justify-between gap-2 border-b border-line px-3 py-2 ${sortable ? "cursor-grab active:cursor-grabbing" : ""}`}
+          draggable={sortable}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            {sortable && <span className="shrink-0 select-none text-slate-600" aria-hidden="true">⠿</span>}
+            {title && <h2 className="truncate text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">{title}</h2>}
+          </div>
           {action}
         </header>
       )}

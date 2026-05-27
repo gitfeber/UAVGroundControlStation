@@ -3,7 +3,8 @@ import type { Feature, FeatureCollection, LineString, Point } from "geojson";
 import type { TelemetryState } from "@uav-ground-control-station/shared";
 import type { Coordinate } from "../lib/geo";
 import { isValidLngLat, toMapLngLat } from "../lib/geo";
-import { formatInteger, formatNumber } from "../lib/format";
+import { resolveHeadingDeg } from "../lib/resolveHeadingDeg";
+import { HudOverlay } from "./HudOverlay";
 
 interface MapPanelProps {
   telemetry: TelemetryState;
@@ -27,8 +28,7 @@ export function MapPanel({ telemetry, coordinate, home }: MapPanelProps) {
   const droneLngLat = useMemo(() => toMapLngLat(coordinate), [coordinate]);
   const homeLngLat = useMemo(() => toMapLngLat(home), [home]);
 
-  const heading =
-    telemetry.position.headingDeg ?? telemetry.position.groundCourseDeg ?? telemetry.motion.yawDeg ?? 0;
+  const heading = resolveHeadingDeg(telemetry) ?? 0;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -151,27 +151,12 @@ export function MapPanel({ telemetry, coordinate, home }: MapPanelProps) {
     source?.setData(pointCollection(homeLngLat));
   }, [homeLngLat, mapReady]);
 
-  const overlay = useMemo(
-    () => ({
-      altitude: telemetry.position.relativeAlt ?? telemetry.position.altMsl,
-      speed: telemetry.motion.groundSpeed,
-      mode: telemetry.vehicle.flightMode,
-      battery: telemetry.battery.remainingPercent
-    }),
-    [telemetry]
-  );
-
   return (
     <main className="relative min-w-0 flex-1">
       <div ref={containerRef} className="h-full w-full bg-slate-950" />
 
-      <div className="pointer-events-none absolute left-4 top-4 rounded-xl border border-cyan-300/20 bg-black/55 px-4 py-3 font-mono text-xs text-slate-200 shadow-glow backdrop-blur">
-        <div className="mb-1 text-[10px] uppercase tracking-[0.22em] text-cyan-200">Drone Overlay</div>
-        <div>ALT {formatNumber(overlay.altitude, 1, "m")}</div>
-        <div>HDG {formatNumber(heading, 0, "deg")}</div>
-        <div>SPD {formatNumber(overlay.speed, 1, "m/s")}</div>
-        <div>MODE {overlay.mode}</div>
-        <div>BAT {formatInteger(overlay.battery, "%")}</div>
+      <div className="pointer-events-none absolute bottom-6 left-1/2 z-10 -translate-x-1/2">
+        <HudOverlay telemetry={telemetry} />
       </div>
 
       <button className="btn-secondary absolute bottom-4 left-4" onClick={() => setTrack([])}>
