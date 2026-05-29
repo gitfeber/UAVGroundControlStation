@@ -1,0 +1,21 @@
+# UAV Ground Control Station
+
+Project guidance for UAV Ground Control Station changes.
+
+
+- Keep this project a slim local GCS for UAVs; desktop (Tauri) is the canonical operator runtime; browser + Node is dev/fallback (see `docs/adr/0001-dual-runtime-desktop-canonical.md`).
+- Use TypeScript everywhere; shared contracts belong in `packages/shared`.
+- Keep production TX16S/CRSF/COM hardware access in `apps/desktop` via Tauri/Rust; keep `apps/server` for the browser dev/fallback MAVLink path; keep `apps/web` visualization-only.
+- On Windows, prefer desktop over WSL-hosted Node so host `COM*` ports work without USB passthrough.
+- Update `README.md` whenever setup, commands, APIs, telemetry behavior, env vars, architecture, or operator workflow changes.
+- Bump the app version for every functional change; keep `package.json`, `apps/desktop/package.json`, `apps/desktop/src-tauri/tauri.conf.json`, and `apps/desktop/src-tauri/Cargo.toml` in sync so MSI upgrades install over older versions.
+- On Windows development machines, run normal repo maintenance commands through WSL.
+- Exception: native Tauri desktop dev/build should run in a Windows terminal when testing host `COM*` hardware access.
+- Keep serial-port handling cross-platform for macOS `/dev/cu.*` and `/dev/tty.*`, Windows `COM*`, and Linux `/dev/ttyACM*` / `/dev/ttyUSB*`; preserve manual path entry for unusual USB serial devices.
+- Filter out empty system serial ports unless device metadata indicates real attached hardware; prefer USB/PNP-backed ports in the UI.
+- Preserve the MVP scope unless requested: no mission planning, parameter editor, fleet management, or reports by default.
+- Follow the existing dark technical UI direction with MapLibre as the dominant central view.
+- Before marking any functional change as complete, run the desktop build in PowerShell with `& "$env:APPDATA\npm\pnpm.cmd" build:desktop`.
+- Treat build warnings as cleanup signals, not noise. Review warnings and fix reasonable codebase-quality issues before finalizing.
+- If the desktop build cannot be run, clearly state why, do not claim the change is fully tested, and include the missing build step in the final notes.
+- When the agent believes a change is complete, working, and tested, always propose a detailed commit message before finishing.

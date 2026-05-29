@@ -1,6 +1,6 @@
 {
   "name": "uav-ground-control-station",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "private": true,
   "description": "Local browser-based MAVLink ground control station for UAVs.",
   "type": "module",
@@ -14,7 +14,8 @@
     "build": "pnpm --filter @uav-ground-control-station/shared build && pnpm --filter @uav-ground-control-station/server build && pnpm --filter @uav-ground-control-station/web build",
     "build:desktop": "pnpm --filter @uav-ground-control-station/shared build && pnpm --filter @uav-ground-control-station/desktop build",
     "lint": "pnpm -r lint",
-    "typecheck": "pnpm --filter @uav-ground-control-station/shared build && pnpm --filter @uav-ground-control-station/shared typecheck && pnpm --filter @uav-ground-control-station/server typecheck && pnpm --filter @uav-ground-control-station/web typecheck"
+    "typecheck": "pnpm --filter @uav-ground-control-station/shared build && pnpm --filter @uav-ground-control-station/shared typecheck && pnpm --filter @uav-ground-control-station/server typecheck && pnpm --filter @uav-ground-control-station/web typecheck",
+    "audit:desktop": "cd apps/desktop/src-tauri && cargo audit"
   },
   "devDependencies": {
     "@eslint/js": "latest",
@@ -25,5 +26,10 @@
     "typescript": "latest",
     "typescript-eslint": "latest",
     "wait-on": "latest"
+  },
+  "pnpm": {
+    "overrides": {
+      "xml2js": "^0.5.0"
+    }
   }
 }
