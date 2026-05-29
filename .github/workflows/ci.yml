@@ -20,6 +20,14 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Cache TypeScript incremental build info
+        uses: actions/cache@v4
+        with:
+          path: |
+            **/*.tsbuildinfo
+          key: ${{ runner.os }}-ts-${{ hashFiles('**/tsconfig*.json', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-ts-
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
@@ -84,6 +92,15 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri -> target
+
+      - name: Cache TypeScript incremental build info
+        uses: actions/cache@v4
+        with:
+          path: |
+            **/*.tsbuildinfo
+          key: ${{ runner.os }}-ts-${{ hashFiles('**/tsconfig*.json', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-ts-
 
       - run: pnpm install --frozen-lockfile
 
