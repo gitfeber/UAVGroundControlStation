@@ -1,0 +1,58 @@
+---
+name: uav-ground-control-station
+description: Project-specific operating rules for the UAV Ground Control Station repo.
+---
+
+# UAV Ground Control Station
+
+Use these rules when working in this repository.
+
+## Scope
+
+- Keep the project a slim local GCS for UAVs.
+- Treat the desktop Tauri app as the canonical operator runtime.
+- Keep the browser + Node path as the dev/fallback runtime.
+- Avoid adding mission planning, parameter editing, fleet management, or reports unless explicitly requested.
+
+## Architecture
+
+- Use TypeScript throughout the monorepo.
+- Keep shared contracts in `packages/shared`.
+- Keep production TX16S/CRSF/COM hardware access in `apps/desktop` via Tauri/Rust.
+- Keep `apps/server` for the browser dev/fallback MAVLink path.
+- Keep `apps/web` visualization-only.
+- On Windows, prefer desktop over WSL-hosted Node so host `COM*` ports work without USB passthrough.
+
+## Workspace conventions
+
+- Update `README.md` whenever setup, commands, APIs, telemetry behavior, environment variables, architecture, or operator workflow changes.
+- Bump the app version for every functional change.
+- Keep `package.json`, `apps/desktop/package.json`, `apps/desktop/src-tauri/tauri.conf.json`, and `apps/desktop/src-tauri/Cargo.toml` in sync so MSI upgrades install over older versions.
+- On Windows development machines, run normal repo maintenance commands through WSL.
+- Exception: native Tauri desktop dev/build should run in a Windows terminal when testing host `COM*` hardware access.
+
+## Hardware and telemetry
+
+- Keep serial-port handling cross-platform for macOS `/dev/cu.*` and `/dev/tty.*`, Windows `COM*`, and Linux `/dev/ttyACM*` / `/dev/ttyUSB*`.
+- Preserve manual path entry for unusual USB serial devices.
+- Filter out empty system serial ports unless device metadata indicates real attached hardware.
+- Prefer USB/PNP-backed ports in the UI.
+- Normalize incoming link data into `TelemetryState`.
+- Preserve the shared `TelemetryState` shape unless the frontend and README are updated together.
+- Keep WebSocket payloads JSON and small enough for local real-time display.
+- Maintain the track limit of 5000 points in the frontend unless there is a deliberate performance change.
+
+## UI direction
+
+- Keep the dark technical GCS feel.
+- Use MapLibre as the dominant central view.
+- Prefer simple local components over adding UI frameworks.
+- Avoid unnecessary animation.
+- Keep the 1920x1080 layout strong while remaining usable on 13-14 inch laptops.
+
+## Completion bar
+
+- Before marking any functional change as complete, run `& "$env:APPDATA\npm\pnpm.cmd" build:desktop` in PowerShell.
+- Treat build warnings as cleanup signals, not noise.
+- If the desktop build cannot be run, clearly say why and include the missing build step in the final notes.
+- When a change is complete, working, and tested, propose a detailed commit message before finishing.

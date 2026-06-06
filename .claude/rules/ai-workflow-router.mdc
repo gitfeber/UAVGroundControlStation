@@ -1,0 +1,24 @@
+---
+name: ai-workflow-router
+description: Routes recurring repo tasks to the right Claude skill.
+---
+
+# AI Workflow Router
+
+Use project skills instead of long ad hoc prompts.
+
+## Skill routing
+
+Use `.claude/skills/grill-with-docs/SKILL.md` when the user wants to stress-test a plan, architecture, domain model, product concept, or implementation approach.
+
+Use `.claude/skills/handoff/SKILL.md` when the user wants a compact summary, restart-safe continuation doc, or handoff for another session.
+
+Use `.claude/skills/caveman/SKILL.md` when the user wants compressed technical communication or explicitly asks for brief / caveman style.
+
+## Token discipline
+
+- Do not load skill files unless relevant.
+- Do not paste whole docs into chat.
+- Prefer referencing paths over duplicating content.
+- Keep default responses concise.
+- For long tasks, inspect relevant project files first, then answer.
