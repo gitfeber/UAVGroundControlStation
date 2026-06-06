@@ -168,7 +168,7 @@ Empty system ports without device metadata are hidden; unusual paths can be ente
 | `VITE_SATELLITE_TILE_URL` | Optional: raster satellite tile URL |
 | `VITE_VIDEO_URL` / `VITE_VIDEO_KIND` | Optional: camera stream (e.g. MJPEG) |
 
-Server: `PORT` (default `3001`), `HOST` (default `0.0.0.0`) in `apps/server`.
+Server: `PORT` (default `3001`), `HOST` (default `127.0.0.1`) in `apps/server`. The server exposes **unauthenticated** serial-control endpoints; it binds loopback only. Setting `HOST` to a routable address (e.g. `0.0.0.0`) is a deliberate opt-in that lets any device on the network open or close the link to flight hardware — see [`docs/adr/0002-server-loopback-only.md`](docs/adr/0002-server-loopback-only.md).
 
 ## Development
 
@@ -178,6 +178,8 @@ pnpm typecheck
 pnpm build          # browser stack
 pnpm build:desktop  # desktop installer
 ```
+
+If you open the repository root in VS Code, rust-analyzer is configured via [.vscode/settings.json](.vscode/settings.json) to use the Tauri crate at [apps/desktop/src-tauri/Cargo.toml](apps/desktop/src-tauri/Cargo.toml).
 
 Agent and architecture rules: [`AGENTS.md`](AGENTS.md).
 

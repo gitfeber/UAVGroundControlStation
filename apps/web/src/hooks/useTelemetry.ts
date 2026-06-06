@@ -296,7 +296,13 @@ export function useTelemetry() {
       });
 
       ws.addEventListener("message", (event) => {
-        const message = JSON.parse(event.data as string) as ServerMessage;
+        let message: ServerMessage;
+        try {
+          message = JSON.parse(event.data as string) as ServerMessage;
+        } catch {
+          addLog("warning", "Discarded a malformed telemetry message from the server.");
+          return;
+        }
         if (message.type === "telemetry") {
           setTelemetry(normalizeTelemetryState(message.data));
         } else if (message.type === "status") {
@@ -325,7 +331,7 @@ export function useTelemetry() {
       if (retryTimer !== null) window.clearTimeout(retryTimer);
       ws.close();
     };
-  }, [mode]);
+  }, [addLog, mode]);
 
   useEffect(() => {
     if (mode !== "desktop") {

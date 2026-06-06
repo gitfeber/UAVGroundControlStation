@@ -25,9 +25,16 @@ export function getAlerts(telemetry: TelemetryState, status: BackendStatus): Ale
     alerts.push({ level: "warning", label: "Satellites below 8" });
   }
 
-  const linkQuality = telemetry.radio.linkQuality ?? telemetry.radio.rssi;
-  if (linkQuality !== null && linkQuality < 35) {
-    alerts.push({ level: "critical", label: "Radio link critical" });
+  // linkQuality is a 0-100% metric (CRSF link quality, or RSSI normalised into
+  // it upstream). It is NOT interchangeable with a raw RSSI count, so evaluate
+  // it on a percentage scale rather than reusing a single ambiguous threshold.
+  const linkQuality = telemetry.radio.linkQuality;
+  if (linkQuality !== null && linkQuality !== undefined) {
+    if (linkQuality < 30) {
+      alerts.push({ level: "critical", label: "Radio link critical" });
+    } else if (linkQuality < 50) {
+      alerts.push({ level: "warning", label: "Radio link weak" });
+    }
   }
 
   if (

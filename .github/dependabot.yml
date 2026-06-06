@@ -1,0 +1,8 @@
+version: 2
+updates:
+  # Keep SHA-pinned GitHub Actions current. Without this, pinning to a commit
+  # freezes actions at a point in time and they never receive security updates.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

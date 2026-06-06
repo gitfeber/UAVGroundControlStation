@@ -208,6 +208,13 @@ struct DesktopState {
 
 const DEFAULT_BAUD_RATE: u32 = 460_800;
 const STATUS_RING_LIMIT: usize = 20;
+/// Webview emit cadence: telemetry ~20Hz, status ~4Hz.
+const TELEMETRY_EMIT_INTERVAL: Duration = Duration::from_millis(50);
+const STATUS_EMIT_INTERVAL: Duration = Duration::from_millis(250);
+/// CRSF-primary latch: number of CRC-valid CRSF frames required to latch, and
+/// how long CRSF may be absent before the latch decays on a non-420k link.
+const CRSF_LATCH_THRESHOLD: u32 = 3;
+const CRSF_DECAY_INTERVAL: Duration = Duration::from_secs(3);
 
 #[tauri::command]
 fn list_ports() -> Result<Vec<DesktopSerialPortInfo>, String> {
@@ -452,15 +459,24 @@ fn serial_reader_loop(
     let mut passthrough_mavlink_parser = MavlinkFrameParser::new();
     let mut crsf_parser = crsf::CrsfFrameParser::new();
     let listen_only = baud_rate == 420_000;
+    // Debounced CRSF detection: a single CRC-valid CRSF frame is no longer
+    // enough to disable MAVLink-direct parsing for the whole session. We latch
+    // only after several frames and decay back if CRSF goes quiet.
     let mut crsf_primary = listen_only;
+    let mut crsf_frame_count: u32 = 0;
+    let mut last_crsf_frame = Instant::now();
     let mut read_buffer = [0_u8; 1024];
-    let mut last_status_emit = Instant::now() - Duration::from_secs(1);
+    // Coalesce webview emits: the parser updates shared state on every frame,
+    // but we push telemetry to the UI at ~20Hz and status at ~4Hz instead of
+    // once per frame (which floods the event channel on fast CRSF links).
+    let mut last_status_emit = Instant::now() - STATUS_EMIT_INTERVAL;
+    let mut last_telemetry_emit = Instant::now() - TELEMETRY_EMIT_INTERVAL;
     let mut last_gcs_heartbeat = Instant::now() - Duration::from_secs(2);
     let mut last_stream_request = Instant::now() - Duration::from_secs(2);
     let mut outbound_sequence = initial_sequence;
 
     while !stop_flag.load(Ordering::SeqCst) {
-        let mut status_dirty = false;
+        let mut telemetry_dirty = false;
 
         if !listen_only && last_gcs_heartbeat.elapsed() >= Duration::from_secs(1) {
             let written = send_gcs_heartbeat(&mut *port, &mut outbound_sequence).map_err(|error| {
@@ -468,7 +484,6 @@ fn serial_reader_loop(
                 error.to_string()
             })?;
             record_tx_bytes(&worker_state, written);
-            status_dirty = true;
             last_gcs_heartbeat = Instant::now();
         }
 
@@ -478,8 +493,13 @@ fn serial_reader_loop(
                 error.to_string()
             })?;
             record_tx_bytes(&worker_state, written);
-            status_dirty = true;
             last_stream_request = Instant::now();
+        }
+
+        // CRSF went quiet on a non-420k link: re-enable MAVLink-direct parsing.
+        if crsf_primary && !listen_only && last_crsf_frame.elapsed() >= CRSF_DECAY_INTERVAL {
+            crsf_primary = false;
+            crsf_frame_count = 0;
         }
 
         match port.read(&mut read_buffer) {
@@ -490,11 +510,16 @@ fn serial_reader_loop(
                 let chunk = &read_buffer[..read];
                 let crsf_frames = crsf_parser.push(chunk);
                 if !crsf_frames.is_empty() {
-                    crsf_primary = true;
+                    crsf_frame_count = crsf_frame_count.saturating_add(crsf_frames.len() as u32);
+                    last_crsf_frame = Instant::now();
+                    if !listen_only && crsf_frame_count >= CRSF_LATCH_THRESHOLD {
+                        crsf_primary = true;
+                    }
+                    telemetry_dirty = true;
                 }
 
                 for frame in crsf_frames {
-                    apply_crsf_frame(&worker_state, &app, frame, &mut passthrough_mavlink_parser)?;
+                    apply_crsf_frame(&worker_state, frame, &mut passthrough_mavlink_parser)?;
                 }
 
                 if !crsf_primary {
@@ -505,11 +530,13 @@ fn serial_reader_loop(
                             diagnostics.parser_errors += mavlink_errors;
                         }
                     }
+                    if !mavlink_frames.is_empty() {
+                        telemetry_dirty = true;
+                    }
                     for frame in mavlink_frames {
-                        apply_frame(&worker_state, &app, frame)?;
+                        apply_frame(&worker_state, frame)?;
                     }
                 }
-                status_dirty = true;
             }
             Ok(_) => {}
             Err(error) if error.kind() == std::io::ErrorKind::TimedOut => {}
@@ -520,7 +547,12 @@ fn serial_reader_loop(
             }
         }
 
-        if status_dirty || last_status_emit.elapsed() >= Duration::from_secs(1) {
+        if telemetry_dirty && last_telemetry_emit.elapsed() >= TELEMETRY_EMIT_INTERVAL {
+            emit_worker_telemetry(&worker_state, &app)?;
+            last_telemetry_emit = Instant::now();
+        }
+
+        if last_status_emit.elapsed() >= STATUS_EMIT_INTERVAL {
             emit_worker_status(&worker_state, &app)?;
             last_status_emit = Instant::now();
         }
@@ -637,7 +669,6 @@ fn record_message_stat(worker_state: &WorkerState, message_id: u32) {
 
 fn apply_crsf_frame(
     worker_state: &WorkerState,
-    app: &AppHandle,
     frame: crsf::CrsfFrame,
     passthrough_mavlink_parser: &mut MavlinkFrameParser,
 ) -> Result<(), String> {
@@ -650,17 +681,17 @@ fn apply_crsf_frame(
 
     if !frame.payload.is_empty() && crsf::is_mavlink_passthrough(frame.frame_type) {
         for mavlink_frame in passthrough_mavlink_parser.push(&frame.payload) {
-            apply_frame(worker_state, app, mavlink_frame)?;
+            apply_frame(worker_state, mavlink_frame)?;
         }
     }
 
+    Ok(())
+}
+
+fn emit_worker_telemetry(worker_state: &WorkerState, app: &AppHandle) -> Result<(), String> {
     let telemetry = worker_state.telemetry.lock().map_err(lock_error)?.clone();
     write_log_if_active(worker_state, &telemetry)?;
     let _ = app.emit("telemetry", &telemetry);
-    if let Ok(diagnostics) = worker_state.diagnostics.lock() {
-        let _ = app.emit("status", status_from_parts(&telemetry, &diagnostics));
-    }
-
     Ok(())
 }
 
@@ -679,41 +710,31 @@ fn is_supported_mavlink_message(message_id: u32) -> bool {
     )
 }
 
-fn apply_frame(worker_state: &WorkerState, app: &AppHandle, frame: MavlinkFrame) -> Result<(), String> {
+fn apply_frame(worker_state: &WorkerState, frame: MavlinkFrame) -> Result<(), String> {
     if !is_supported_mavlink_message(frame.message_id) {
         return Ok(());
     }
 
-    let telemetry = {
-        record_message_stat(worker_state, frame.message_id);
-        let mut telemetry = worker_state.telemetry.lock().map_err(lock_error)?;
-        mark_packet(&mut telemetry, frame.system_id, frame.component_id);
-        if telemetry.vehicle.r#type == "TX16S CRSF" {
-            telemetry.vehicle.r#type = "ArduPilot".to_string();
-        }
+    record_message_stat(worker_state, frame.message_id);
+    let mut telemetry = worker_state.telemetry.lock().map_err(lock_error)?;
+    mark_packet(&mut telemetry, frame.system_id, frame.component_id);
+    if telemetry.vehicle.r#type == "TX16S CRSF" {
+        telemetry.vehicle.r#type = "ArduPilot".to_string();
+    }
 
-        match frame.message_id {
-            0 => update_heartbeat(&mut telemetry, &frame.payload),
-            1 => update_sys_status(&mut telemetry, &frame.payload),
-            24 => update_gps_raw_int(&mut telemetry, &frame.payload),
-            30 => update_attitude(&mut telemetry, &frame.payload),
-            33 => update_global_position_int(&mut telemetry, &frame.payload),
-            62 => update_nav_controller_output(&mut telemetry, &frame.payload),
-            65 => update_rc_channels(&mut telemetry, &frame.payload),
-            74 => update_vfr_hud(&mut telemetry, &frame.payload),
-            109 => update_radio_status(&mut telemetry, &frame.payload),
-            147 => update_battery_status(&mut telemetry, &frame.payload),
-            253 => update_status_text(&mut telemetry, &frame.payload),
-            _ => {}
-        }
-
-        telemetry.clone()
-    };
-
-    write_log_if_active(worker_state, &telemetry)?;
-    let _ = app.emit("telemetry", &telemetry);
-    if let Ok(diagnostics) = worker_state.diagnostics.lock() {
-        let _ = app.emit("status", status_from_parts(&telemetry, &diagnostics));
+    match frame.message_id {
+        0 => update_heartbeat(&mut telemetry, &frame.payload),
+        1 => update_sys_status(&mut telemetry, &frame.payload),
+        24 => update_gps_raw_int(&mut telemetry, &frame.payload),
+        30 => update_attitude(&mut telemetry, &frame.payload),
+        33 => update_global_position_int(&mut telemetry, &frame.payload),
+        62 => update_nav_controller_output(&mut telemetry, &frame.payload),
+        65 => update_rc_channels(&mut telemetry, &frame.payload),
+        74 => update_vfr_hud(&mut telemetry, &frame.payload),
+        109 => update_radio_status(&mut telemetry, &frame.payload),
+        147 => update_battery_status(&mut telemetry, &frame.payload),
+        253 => update_status_text(&mut telemetry, &frame.payload),
+        _ => {}
     }
 
     Ok(())
@@ -757,13 +778,23 @@ impl MavlinkFrameParser {
                 break;
             };
 
-            let frame: Vec<u8> = self.buffer.drain(0..frame_len).collect();
-            if let Some(parsed) = parse_frame(&frame) {
-                if is_supported_mavlink_message(parsed.message_id) {
+            match parse_frame(&self.buffer[0..frame_len]) {
+                // Structurally valid frame we do not decode: skip it cleanly.
+                Some(parsed) if !is_supported_mavlink_message(parsed.message_id) => {
+                    self.buffer.drain(0..frame_len);
+                }
+                // Supported message with a verified x25 checksum: accept it.
+                Some(parsed) if mavlink_crc_valid(&self.buffer[0..frame_len], parsed.message_id) => {
+                    self.buffer.drain(0..frame_len);
                     frames.push(parsed);
                 }
-            } else {
-                self.parser_errors += 1;
+                // Bad CRC or garbage at this position. Drop a single byte and
+                // resync instead of trusting a length that may come from a false
+                // start byte embedded in another protocol's payload.
+                _ => {
+                    self.parser_errors += 1;
+                    self.buffer.drain(0..1);
+                }
             }
         }
 
@@ -832,6 +863,73 @@ fn parse_frame(frame: &[u8]) -> Option<MavlinkFrame> {
         }
         _ => None,
     }
+}
+
+/// Verify the trailing MAVLink x25 checksum of a complete v1/v2 frame.
+///
+/// The seed (`CRC_EXTRA`) is per message definition, so this only validates the
+/// message IDs we decode (see `mavlink_crc_extra`). For a v2 frame the optional
+/// 13-byte signature follows the checksum and is excluded from the calculation.
+fn mavlink_crc_valid(frame: &[u8], message_id: u32) -> bool {
+    let Some(crc_extra) = mavlink_crc_extra(message_id) else {
+        return false;
+    };
+
+    let (header_len, payload_len) = match (frame.first().copied(), frame.get(1).copied()) {
+        (Some(0xfe), Some(len)) => (6_usize, len as usize),
+        (Some(0xfd), Some(len)) => (10_usize, len as usize),
+        _ => return false,
+    };
+
+    let crc_start = header_len + payload_len;
+    let Some(crc_bytes) = frame.get(crc_start..crc_start + 2) else {
+        return false;
+    };
+    let Some(checksummed) = frame.get(1..crc_start) else {
+        return false;
+    };
+
+    let expected = u16::from_le_bytes([crc_bytes[0], crc_bytes[1]]);
+    mavlink_x25_crc(checksummed, crc_extra) == expected
+}
+
+/// CRC_EXTRA seed per supported message ID (common + ardupilotmega dialects).
+/// Values mirror `is_supported_mavlink_message`; an ID absent here cannot be
+/// CRC-validated and is therefore not accepted.
+fn mavlink_crc_extra(message_id: u32) -> Option<u8> {
+    let seed = match message_id {
+        0 => 50,
+        1 => 124,
+        2 => 137,
+        24 => 24,
+        27 => 144,
+        29 => 115,
+        30 => 39,
+        32 => 185,
+        33 => 104,
+        36 => 222,
+        42 => 28,
+        62 => 183,
+        65 => 118,
+        74 => 20,
+        87 => 150,
+        109 => 185,
+        125 => 203,
+        136 => 1,
+        141 => 47,
+        147 => 154,
+        152 => 208,
+        163 => 127,
+        165 => 21,
+        168 => 1,
+        178 => 47,
+        193 => 71,
+        241 => 90,
+        245 => 130,
+        253 => 83,
+        _ => return None,
+    };
+    Some(seed)
 }
 
 fn initial_telemetry() -> TelemetryState {
@@ -1112,8 +1210,20 @@ fn update_nav_controller_output(telemetry: &mut TelemetryState, payload: &[u8]) 
 
 fn set_voltage(telemetry: &mut TelemetryState, voltage: Option<f64>) {
     telemetry.battery.voltage = voltage;
-    telemetry.battery.cell_voltage_estimate = voltage.map(|value| value / 4.0);
+    telemetry.battery.cell_voltage_estimate = voltage.and_then(estimate_cell_voltage);
     telemetry.stats.min_voltage = min_optional(telemetry.stats.min_voltage, voltage);
+}
+
+/// Per-cell voltage estimate. Infers the LiPo cell count from the pack voltage
+/// (~3.8V nominal per cell) instead of assuming a fixed 4S pack, so 3S/6S packs
+/// report a sensible per-cell figure.
+fn estimate_cell_voltage(pack_voltage: f64) -> Option<f64> {
+    if !pack_voltage.is_finite() || pack_voltage <= 0.0 {
+        return None;
+    }
+
+    let cells = (pack_voltage / 3.8).round().clamp(1.0, 14.0);
+    Some(pack_voltage / cells)
 }
 
 fn set_current(telemetry: &mut TelemetryState, current: Option<f64>) {
@@ -1453,5 +1563,17 @@ mod parser_tests {
         let frames = parser.push_isolated(&frame);
         assert!(frames.is_empty());
         assert_eq!(parser.take_parser_errors(), 0);
+    }
+
+    #[test]
+    fn mavlink_parser_rejects_bad_crc() {
+        let mut sequence = 0_u8;
+        let mut frame = mavlink_v1_packet(0, &[0; 9], 50, &mut sequence);
+        let last = frame.len() - 1;
+        frame[last] ^= 0xff;
+        let mut parser = MavlinkFrameParser::new();
+        let frames = parser.push_isolated(&frame);
+        assert!(frames.is_empty());
+        assert!(parser.take_parser_errors() > 0);
     }
 }
