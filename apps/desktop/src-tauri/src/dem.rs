@@ -55,7 +55,15 @@ pub struct DemService {
     window: Option<DemWindow>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DemHorizontalCrs {
+    Wgs84Geographic,
+    /// ETRS89 / UTM zone 32N — EPSG:25832 projected DEM and similar projected GeoTIFFs.
+    Epsg25832Utm32N,
+}
+
 struct DemWindow {
+    crs: DemHorizontalCrs,
     center_lat: f64,
     center_lon: f64,
     west_lon: f64,
@@ -64,6 +72,10 @@ struct DemWindow {
     rows: usize,
     lon_step: f64,
     lat_step: f64,
+    west_easting: f64,
+    north_northing: f64,
+    east_step: f64,
+    north_step: f64,
     nodata: Option<f32>,
     values: Vec<f32>,
 }
@@ -121,7 +133,7 @@ impl DemService {
 
         let extent = geo_tiff.model_extent();
         let resolution_m = estimate_resolution_m(&geo_tiff, &extent);
-        let horizontal_crs = infer_horizontal_crs(&extent);
+        let horizontal_crs = infer_horizontal_crs_label(&extent);
 
         self.geo_tiff = Some(geo_tiff);
         self.window = None;
@@ -215,23 +227,48 @@ impl DemService {
             return Err(DemError::NotLoaded);
         }
 
-        let (lat, lon) = enu_to_geodetic(anchor_lat, anchor_lon, east_m, north_m);
         self.ensure_window(anchor_lat, anchor_lon)?;
         let window = self.window.as_ref().ok_or(DemError::NotLoaded)?;
 
-        if lat < window.south_lat() || lat > window.north_lat || lon < window.west_lon || lon > window.east_lon() {
-            return Err(DemError::OutOfCoverage);
-        }
-
-        let point_amsl = window.sample(lat, lon).ok_or(DemError::NoData)?;
+        let point_amsl = match window.crs {
+            DemHorizontalCrs::Wgs84Geographic => {
+                let (lat, lon) = enu_to_geodetic(anchor_lat, anchor_lon, east_m, north_m);
+                if lat < window.south_lat() || lat > window.north_lat || lon < window.west_lon || lon > window.east_lon() {
+                    return Err(DemError::OutOfCoverage);
+                }
+                window.sample_geographic(lat, lon).ok_or(DemError::NoData)?
+            }
+            DemHorizontalCrs::Epsg25832Utm32N => {
+                let (anchor_easting, anchor_northing) = wgs84_to_epsg25832(anchor_lat, anchor_lon);
+                let easting = anchor_easting + east_m;
+                let northing = anchor_northing + north_m;
+                if easting < window.west_easting
+                    || easting > window.east_easting()
+                    || northing < window.south_northing()
+                    || northing > window.north_northing
+                {
+                    return Err(DemError::OutOfCoverage);
+                }
+                window.sample_projected(easting, northing).ok_or(DemError::NoData)?
+            }
+        };
         if window.is_nodata(point_amsl) {
             return Err(DemError::NoData);
         }
 
-        let anchor_amsl = window
-            .sample(anchor_lat, anchor_lon)
-            .filter(|value| !window.is_nodata(*value))
-            .ok_or(DemError::NoData)?;
+        let anchor_amsl = match window.crs {
+            DemHorizontalCrs::Wgs84Geographic => window
+                .sample_geographic(anchor_lat, anchor_lon)
+                .filter(|value| !window.is_nodata(*value))
+                .ok_or(DemError::NoData)?,
+            DemHorizontalCrs::Epsg25832Utm32N => {
+                let (anchor_easting, anchor_northing) = wgs84_to_epsg25832(anchor_lat, anchor_lon);
+                window
+                    .sample_projected(anchor_easting, anchor_northing)
+                    .filter(|value| !window.is_nodata(*value))
+                    .ok_or(DemError::NoData)?
+            }
+        };
 
         Ok(SampleResult {
             elevation_m: f64::from(point_amsl),
@@ -283,13 +320,35 @@ impl DemWindow {
         self.west_lon + self.lon_step * self.cols as f64
     }
 
-    fn sample(&self, lat: f64, lon: f64) -> Option<f32> {
+    fn east_easting(&self) -> f64 {
+        self.west_easting + self.east_step * self.cols as f64
+    }
+
+    fn south_northing(&self) -> f64 {
+        self.north_northing - self.north_step * self.rows as f64
+    }
+
+    fn sample_geographic(&self, lat: f64, lon: f64) -> Option<f32> {
         if self.cols < 2 || self.rows < 2 {
             return self.values.first().copied();
         }
 
         let col_f = (lon - self.west_lon) / self.lon_step;
         let row_f = (self.north_lat - lat) / self.lat_step;
+        self.bilinear_sample(col_f, row_f)
+    }
+
+    fn sample_projected(&self, easting: f64, northing: f64) -> Option<f32> {
+        if self.cols < 2 || self.rows < 2 {
+            return self.values.first().copied();
+        }
+
+        let col_f = (easting - self.west_easting) / self.east_step;
+        let row_f = (self.north_northing - northing) / self.north_step;
+        self.bilinear_sample(col_f, row_f)
+    }
+
+    fn bilinear_sample(&self, col_f: f64, row_f: f64) -> Option<f32> {
         if col_f < 0.0 || row_f < 0.0 {
             return None;
         }
@@ -335,34 +394,84 @@ fn empty_metadata() -> TerrainMetadataResponse {
     }
 }
 
-fn infer_horizontal_crs(extent: &Rect) -> String {
+fn infer_horizontal_crs(extent: &Rect) -> DemHorizontalCrs {
     if extent.min.x >= -180.0 && extent.max.x <= 180.0 && extent.min.y >= -90.0 && extent.max.y <= 90.0 {
-        "EPSG:4326".to_string()
+        DemHorizontalCrs::Wgs84Geographic
+    } else if extent.min.x >= 100_000.0
+        && extent.max.x <= 1_000_000.0
+        && extent.min.y >= 4_000_000.0
+        && extent.max.y <= 6_500_000.0
+    {
+        DemHorizontalCrs::Epsg25832Utm32N
     } else {
-        "GeoTIFF-Projected".to_string()
+        DemHorizontalCrs::Epsg25832Utm32N
+    }
+}
+
+fn infer_horizontal_crs_label(extent: &Rect) -> String {
+    match infer_horizontal_crs(extent) {
+        DemHorizontalCrs::Wgs84Geographic => "EPSG:4326".to_string(),
+        DemHorizontalCrs::Epsg25832Utm32N => "EPSG:25832".to_string(),
     }
 }
 
 fn build_window(geo_tiff: &GeoTiffReader, center_lat: f64, center_lon: f64) -> Result<DemWindow, DemError> {
+    let crs = infer_horizontal_crs(&geo_tiff.model_extent());
     let cols = MAX_WINDOW_SAMPLES;
     let rows = MAX_WINDOW_SAMPLES;
     let half_width = DEFAULT_WINDOW_HALF_WIDTH_M;
-    let lon_step = (2.0 * half_width) / meters_per_degree_lon(center_lat) / cols as f64;
-    let lat_step = (2.0 * half_width) / meters_per_degree_lat(center_lat) / rows as f64;
-    let west_lon = center_lon - half_width / meters_per_degree_lon(center_lat);
-    let north_lat = center_lat + half_width / meters_per_degree_lat(center_lat);
 
     let mut values = Vec::with_capacity(cols * rows);
-    for row in 0..rows {
-        let lat = north_lat - row as f64 * lat_step;
-        for col in 0..cols {
-            let lon = west_lon + col as f64 * lon_step;
-            let value = sample_geotiff(geo_tiff, lat, lon).unwrap_or(f32::NAN);
-            values.push(value);
-        }
-    }
+    let (west_lon, north_lat, lon_step, lat_step, west_easting, north_northing, east_step, north_step) =
+        match crs {
+            DemHorizontalCrs::Wgs84Geographic => {
+                let lon_step = (2.0 * half_width) / meters_per_degree_lon(center_lat) / cols as f64;
+                let lat_step = (2.0 * half_width) / meters_per_degree_lat(center_lat) / rows as f64;
+                let west_lon = center_lon - half_width / meters_per_degree_lon(center_lat);
+                let north_lat = center_lat + half_width / meters_per_degree_lat(center_lat);
+
+                for row in 0..rows {
+                    let lat = north_lat - row as f64 * lat_step;
+                    for col in 0..cols {
+                        let lon = west_lon + col as f64 * lon_step;
+                        let value = sample_geotiff_geographic(geo_tiff, lon, lat).unwrap_or(f32::NAN);
+                        values.push(value);
+                    }
+                }
+
+                (west_lon, north_lat, lon_step, lat_step, 0.0, 0.0, 0.0, 0.0)
+            }
+            DemHorizontalCrs::Epsg25832Utm32N => {
+                let (center_easting, center_northing) = wgs84_to_epsg25832(center_lat, center_lon);
+                let east_step = (2.0 * half_width) / cols as f64;
+                let north_step = (2.0 * half_width) / rows as f64;
+                let west_easting = center_easting - half_width;
+                let north_northing = center_northing + half_width;
+
+                for row in 0..rows {
+                    let northing = north_northing - row as f64 * north_step;
+                    for col in 0..cols {
+                        let easting = west_easting + col as f64 * east_step;
+                        let value = sample_geotiff_projected(geo_tiff, easting, northing).unwrap_or(f32::NAN);
+                        values.push(value);
+                    }
+                }
+
+                (
+                    center_lon,
+                    center_lat,
+                    0.0,
+                    0.0,
+                    west_easting,
+                    north_northing,
+                    east_step,
+                    north_step,
+                )
+            }
+        };
 
     Ok(DemWindow {
+        crs,
         center_lat,
         center_lon,
         west_lon,
@@ -371,13 +480,21 @@ fn build_window(geo_tiff: &GeoTiffReader, center_lat: f64, center_lon: f64) -> R
         rows,
         lon_step,
         lat_step,
+        west_easting,
+        north_northing,
+        east_step,
+        north_step,
         nodata: None,
         values,
     })
 }
 
-fn sample_geotiff(geo_tiff: &GeoTiffReader, lat: f64, lon: f64) -> Option<f32> {
+fn sample_geotiff_geographic(geo_tiff: &GeoTiffReader, lon: f64, lat: f64) -> Option<f32> {
     geo_tiff.get_value_at::<f32>(&Coord { x: lon, y: lat }, 0)
+}
+
+fn sample_geotiff_projected(geo_tiff: &GeoTiffReader, easting: f64, northing: f64) -> Option<f32> {
+    geo_tiff.get_value_at::<f32>(&Coord { x: easting, y: northing }, 0)
 }
 
 fn estimate_resolution_m(geo_tiff: &GeoTiffReader, extent: &Rect) -> f64 {
@@ -420,6 +537,49 @@ fn geodetic_to_enu(anchor_lat: f64, anchor_lon: f64, lat: f64, lon: f64) -> (f64
     (east_m, north_m)
 }
 
+/// WGS84 geodetic coordinates to EPSG:25832 (ETRS89 / UTM zone 32N) easting/northing meters.
+fn wgs84_to_epsg25832(lat_deg: f64, lon_deg: f64) -> (f64, f64) {
+    const ZONE: i32 = 32;
+    const FALSE_EASTING: f64 = 500_000.0;
+    const SCALE: f64 = 0.9996;
+    const K0: f64 = SCALE;
+
+    let lat = lat_deg.to_radians();
+    let lon = lon_deg.to_radians();
+    let lon_origin = (((ZONE - 1) * 6 - 180 + 3) as f64).to_radians();
+
+    let sin_lat = lat.sin();
+    let cos_lat = lat.cos();
+    let tan_lat = lat.tan();
+
+    let e2 = WGS84_E2;
+    let ep2 = e2 / (1.0 - e2);
+    let n = WGS84_A / (1.0 - e2 * sin_lat * sin_lat).sqrt();
+    let t = tan_lat * tan_lat;
+    let c = ep2 * cos_lat * cos_lat;
+    let a = (lon - lon_origin) * cos_lat;
+
+    let m = WGS84_A
+        * ((1.0 - e2 / 4.0 - 3.0 * e2 * e2 / 64.0 - 5.0 * e2 * e2 * e2 / 256.0) * lat
+            - (3.0 * e2 / 8.0 + 3.0 * e2 * e2 / 32.0 + 45.0 * e2 * e2 * e2 / 1024.0) * (2.0 * lat).sin()
+            + (15.0 * e2 * e2 / 256.0 + 45.0 * e2 * e2 * e2 / 1024.0) * (4.0 * lat).sin()
+            - (35.0 * e2 * e2 * e2 / 3072.0) * (6.0 * lat).sin());
+
+    let easting = FALSE_EASTING
+        + K0
+            * n
+            * (a + (1.0 - t + c) * a.powi(3) / 6.0
+                + (5.0 - 18.0 * t + t * t + 72.0 * c - 58.0 * ep2) * a.powi(5) / 120.0);
+    let northing = K0
+        * (m + n
+            * tan_lat
+            * (a * a / 2.0
+                + (5.0 - t + 9.0 * c + 4.0 * c * c) * a.powi(4) / 24.0
+                + (61.0 - 58.0 * t + t * t + 600.0 * c - 330.0 * ep2) * a.powi(6) / 720.0));
+
+    (easting, northing)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -432,5 +592,23 @@ mod tests {
         let (east_m, north_m) = geodetic_to_enu(anchor_lat, anchor_lon, lat, lon);
         assert!((east_m - 120.0).abs() < 0.01);
         assert!((north_m + 80.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn wgs84_to_epsg25832_matches_reference_point() {
+        // Generic UTM32N reference — expected easting/northing within ~1 m of recomputed values.
+        let (easting, northing) = wgs84_to_epsg25832(50.0, 10.0);
+        assert!((easting - 571_666.0).abs() < 2.0);
+        assert!((northing - 5_539_110.0).abs() < 2.0);
+    }
+
+    #[test]
+    fn projected_extent_is_classified_as_epsg25832() {
+        let extent = Rect::new(
+            Coord { x: 400_000.0, y: 5_200_000.0 },
+            Coord { x: 900_000.0, y: 5_500_000.0 },
+        );
+        assert_eq!(infer_horizontal_crs(&extent), DemHorizontalCrs::Epsg25832Utm32N);
+        assert_eq!(infer_horizontal_crs_label(&extent), "EPSG:25832");
     }
 }
