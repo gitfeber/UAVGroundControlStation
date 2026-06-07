@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@uav-ground-control-station/shared": "workspace:*",
+    "@uav-ground-control-station/target-estimation": "workspace:*",
     "@tauri-apps/api": "latest",
     "@vitejs/plugin-react": "latest",
     "autoprefixer": "latest",

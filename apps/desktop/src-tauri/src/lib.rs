@@ -16,6 +16,7 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager, State};
 
 mod crsf;
+mod dem;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -205,6 +206,7 @@ struct DesktopState {
     stop_reader: Mutex<Option<Arc<AtomicBool>>>,
     logging: Arc<Mutex<LoggerState>>,
     diagnostics: Arc<Mutex<SerialDiagnostics>>,
+    dem: Arc<Mutex<dem::DemService>>,
 }
 
 const DEFAULT_BAUD_RATE: u32 = 460_800;
@@ -407,6 +409,71 @@ fn stop_logging(state: State<DesktopState>) -> Result<LoggingStatus, String> {
     Ok(logging_status_from_logger(&logging))
 }
 
+#[tauri::command]
+fn load_terrain_model(path: String, state: State<DesktopState>) -> Result<dem::TerrainMetadataResponse, String> {
+    let mut dem = state.dem.lock().map_err(lock_error)?;
+    dem.load_terrain_model(&path).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn get_terrain_metadata(state: State<DesktopState>) -> Result<dem::TerrainMetadataResponse, String> {
+    let dem = state.dem.lock().map_err(lock_error)?;
+    Ok(dem.metadata())
+}
+
+#[tauri::command]
+fn clear_terrain_model(state: State<DesktopState>) -> Result<dem::TerrainMetadataResponse, String> {
+    let mut dem = state.dem.lock().map_err(lock_error)?;
+    dem.clear_terrain_model();
+    Ok(dem.metadata())
+}
+
+#[tauri::command]
+fn sample_terrain_amsl_at(
+    anchor_lat: f64,
+    anchor_lon: f64,
+    lat: f64,
+    lon: f64,
+    state: State<DesktopState>,
+) -> Result<Option<f64>, String> {
+    let mut dem = state.dem.lock().map_err(lock_error)?;
+    match dem.terrain_amsl_at(anchor_lat, anchor_lon, lat, lon) {
+        Ok(value) => Ok(Some(value)),
+        Err(dem::DemError::OutOfCoverage) | Err(dem::DemError::NoData) => Ok(None),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+#[tauri::command]
+fn get_elevation_at_enu(
+    anchor_lat: f64,
+    anchor_lon: f64,
+    east_m: f64,
+    north_m: f64,
+    state: State<DesktopState>,
+) -> Result<Option<dem::TerrainElevationSampleResponse>, String> {
+    let mut dem = state.dem.lock().map_err(lock_error)?;
+    match dem.get_elevation_at_enu(anchor_lat, anchor_lon, east_m, north_m) {
+        Ok(sample) => Ok(Some(sample)),
+        Err(dem::DemError::OutOfCoverage) | Err(dem::DemError::NoData) => Ok(None),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+#[tauri::command]
+fn get_elevations_along_ray(
+    anchor_lat: f64,
+    anchor_lon: f64,
+    origin: dem::EnuPoint,
+    direction: dem::EnuPoint,
+    distances_m: Vec<f64>,
+    state: State<DesktopState>,
+) -> Result<Vec<Option<dem::TerrainRaySampleResponse>>, String> {
+    let mut dem = state.dem.lock().map_err(lock_error)?;
+    dem.get_elevations_along_ray(anchor_lat, anchor_lon, origin, direction, distances_m)
+        .map_err(|error| error.to_string())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .manage(DesktopState {
@@ -418,6 +485,7 @@ pub fn run() {
                 session_start_ms: 0,
             })),
             diagnostics: Arc::new(Mutex::new(SerialDiagnostics::default())),
+            dem: Arc::new(Mutex::new(dem::DemService::new())),
         })
         .invoke_handler(tauri::generate_handler![
             list_ports,
@@ -428,7 +496,13 @@ pub fn run() {
             get_telemetry,
             start_logging,
             stop_logging,
-            logging_status
+            logging_status,
+            load_terrain_model,
+            get_terrain_metadata,
+            clear_terrain_model,
+            sample_terrain_amsl_at,
+            get_elevation_at_enu,
+            get_elevations_along_ray
         ])
         .run(tauri::generate_context!())
         .expect("error while running UAV Ground Control Station desktop app");

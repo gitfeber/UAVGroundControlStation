@@ -157,6 +157,21 @@ Host `COM*` ports are often unreachable from **WSL-hosted Node**. For TX16S and 
 
 Empty system ports without device metadata are hidden; unusual paths can be entered manually.
 
+### Ground target terrain model (desktop)
+
+Real elevation for **ground target estimation** is desktop-only (see [`docs/adr/0005-target-estimation-ts-rust-split.md`](docs/adr/0005-target-estimation-ts-rust-split.md)). Load a local GeoTIFF/DGM through the Tauri bridge; the Rust backend keeps a sliding **4 km × 4 km** window around the UAV and serves batched elevation queries for ray marching.
+
+| Tauri command | Purpose |
+|---------------|---------|
+| `load_terrain_model` | Open a local GeoTIFF path; returns terrain metadata |
+| `get_terrain_metadata` | Current terrain model metadata / loaded flag |
+| `clear_terrain_model` | Unload the active terrain model |
+| `sample_terrain_amsl_at` | AMSL sample at a lat/lon (anchor-aware window cache) |
+| `get_elevation_at_enu` | ENU elevation relative to estimate anchor |
+| `get_elevations_along_ray` | Batched samples for target-estimation ray marching |
+
+Frontend wrapper: [`apps/web/src/lib/tauriDemTerrain.ts`](apps/web/src/lib/tauriDemTerrain.ts) (`TauriDemTerrainProvider`). Browser dev continues to use synthetic terrain only until the UI milestone wires this in.
+
 ## Configuration (browser stack)
 
 `.env` at the repository root (see [`.env.example`](.env.example)):
