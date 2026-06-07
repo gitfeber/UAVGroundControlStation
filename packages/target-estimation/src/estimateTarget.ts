@@ -9,9 +9,10 @@ import {
 } from "@uav-ground-control-station/shared";
 import { depressionAngleDeg, opticalAxisEnu, resolveGimbalAttitude } from "./gimbal.js";
 import { enuDeltaToGeodetic, normalizeVector } from "./geo.js";
-import type { FlatTerrainProvider } from "./flatTerrain.js";
 import { aggregateTargetQuality, MIN_DEPRESSION_DEG, STALE_TELEMETRY_WARN_MS } from "./quality.js";
+import { intersectRayWithTerrain } from "./rayIntersect.js";
 import type { TelemetryLookupResult } from "./telemetryBuffer.js";
+import { terrainAmslAt } from "./terrainUtils.js";
 
 export interface EstimateTargetInput {
   telemetry: TelemetryState;
@@ -22,32 +23,7 @@ export interface EstimateTargetInput {
   telemetrySampledAtMs: number;
 }
 
-function terrainAmslAt(terrain: TerrainProvider, lat: number, lon: number): number {
-  if ("terrainAmslAt" in terrain && typeof terrain.terrainAmslAt === "function") {
-    return (terrain as FlatTerrainProvider).terrainAmslAt(lat, lon);
-  }
-  return 0;
-}
-
-function intersectFlatEnuPlane(
-  originEnu: EnuTuple,
-  directionEnu: EnuTuple,
-  surfaceEnuM: number
-): { hitEnu: EnuTuple; slantRangeM: number } | null {
-  const [ox, oy, oz] = originEnu;
-  const [dx, dy, dz] = directionEnu;
-  if (dz >= -1e-9) return null;
-
-  const t = (surfaceEnuM - oz) / dz;
-  if (t <= 0) return null;
-
-  return {
-    slantRangeM: t,
-    hitEnu: [ox + dx * t, oy + dy * t, surfaceEnuM]
-  };
-}
-
-export function estimateTargetFromTelemetry(input: EstimateTargetInput): TargetEstimate {
+export async function estimateTargetFromTelemetry(input: EstimateTargetInput): Promise<TargetEstimate> {
   const { telemetry, lookup, terrain, settings, estimatedAtMs, telemetrySampledAtMs } = input;
   const estimate = createEmptyTargetEstimate(estimatedAtMs);
   estimate.telemetrySampledAtMs = telemetrySampledAtMs;
@@ -117,19 +93,19 @@ export function estimateTargetFromTelemetry(input: EstimateTargetInput): TargetE
     reasons.push("horizon_too_shallow");
   }
 
-  const intersection = intersectFlatEnuPlane(originEnu, directionEnu, 0);
-  if (!intersection) {
-    reasons.push("no_ray_intersection");
+  const intersection = await intersectRayWithTerrain(originEnu, directionEnu, terrain);
+  if (!intersection.ok) {
+    reasons.push(intersection.reason);
     estimate.reasons = reasons;
     return finalizeEstimate(estimate, reasons, gimbal);
   }
 
-  const { hitEnu, slantRangeM } = intersection;
+  const { hitEnu, slantRangeM, terrainElevationM } = intersection.hit;
   const hitGeo = enuDeltaToGeodetic(lat, lon, hitEnu[0], hitEnu[1]);
 
   estimate.lat = hitGeo.lat;
   estimate.lon = hitGeo.lon;
-  estimate.terrainElevationM = terrainAtAnchor;
+  estimate.terrainElevationM = terrainAtAnchor + terrainElevationM;
   estimate.slantRangeM = slantRangeM;
   estimate.groundRangeM = Math.hypot(hitEnu[0], hitEnu[1]);
   estimate.reasons = reasons;

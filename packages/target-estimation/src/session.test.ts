@@ -1,6 +1,7 @@
 import type { GimbalState, TelemetryState } from "@uav-ground-control-station/shared";
 import { describe, expect, it } from "vitest";
 import { FlatTerrainProvider } from "./flatTerrain.js";
+import { SlopedPlaneTerrainProvider } from "./slopedTerrain.js";
 import { TargetEstimationSession } from "./session.js";
 
 function sample(overrides: Partial<TelemetryState> & { sampledAtMs: number }): TelemetryState {
@@ -91,7 +92,7 @@ function earthGimbal(pitchDeg: number, yawDeg = 0, rollDeg = 0, sampledAtMs = 10
 describe("TargetEstimationSession", () => {
   const terrain = new FlatTerrainProvider({ elevationAmslM: 400 });
 
-  it("estimates nadir ground target on flat terrain", () => {
+  it("estimates nadir ground target on flat terrain", async () => {
     const session = new TargetEstimationSession({ terrain });
     session.push(
       sample({
@@ -101,7 +102,7 @@ describe("TargetEstimationSession", () => {
       })
     );
 
-    const estimate = session.estimate({ estimatedAtMs: 1200, atPcTimeMs: 1000 });
+    const estimate = await session.estimate({ estimatedAtMs: 1200, atPcTimeMs: 1000 });
 
     expect(estimate.valid).toBe(true);
     expect(estimate.quality).toBe("good");
@@ -112,7 +113,7 @@ describe("TargetEstimationSession", () => {
     expect(estimate.terrainElevationM).toBe(400);
   });
 
-  it("estimates an offset ground target when pitched 45 degrees north", () => {
+  it("estimates an offset ground target when pitched 45 degrees north", async () => {
     const session = new TargetEstimationSession({ terrain });
     session.push(
       sample({
@@ -121,7 +122,7 @@ describe("TargetEstimationSession", () => {
       })
     );
 
-    const estimate = session.estimate({ estimatedAtMs: 2200, atPcTimeMs: 2000 });
+    const estimate = await session.estimate({ estimatedAtMs: 2200, atPcTimeMs: 2000 });
 
     expect(estimate.valid).toBe(true);
     expect(estimate.groundRangeM).toBeCloseTo(100, 1);
@@ -129,22 +130,22 @@ describe("TargetEstimationSession", () => {
     expect(estimate.lon).toBeCloseTo(10, 3);
   });
 
-  it("blocks replay and simulation source modes", () => {
+  it("blocks replay and simulation source modes", async () => {
     const replaySession = new TargetEstimationSession({ terrain, sourceMode: "replay" });
-    const estimate = replaySession.estimate({ estimatedAtMs: 1000 });
+    const estimate = await replaySession.estimate({ estimatedAtMs: 1000 });
     expect(estimate.valid).toBe(false);
     expect(estimate.reasons).toContain("target_estimation_live_only");
   });
 
-  it("returns gimbal_unavailable when gimbal telemetry is missing", () => {
+  it("returns gimbal_unavailable when gimbal telemetry is missing", async () => {
     const session = new TargetEstimationSession({ terrain });
     session.push(sample({ sampledAtMs: 1000, gimbal: null }));
-    const estimate = session.estimate({ estimatedAtMs: 1200, atPcTimeMs: 1000 });
+    const estimate = await session.estimate({ estimatedAtMs: 1200, atPcTimeMs: 1000 });
     expect(estimate.valid).toBe(false);
     expect(estimate.reasons).toContain("gimbal_unavailable");
   });
 
-  it("warns when body-fixed attitude fallback is enabled", () => {
+  it("warns when body-fixed attitude fallback is enabled", async () => {
     const session = new TargetEstimationSession({
       terrain,
       settings: {
@@ -170,9 +171,39 @@ describe("TargetEstimationSession", () => {
       })
     );
 
-    const estimate = session.estimate({ estimatedAtMs: 1000, atPcTimeMs: 1000 });
+    const estimate = await session.estimate({ estimatedAtMs: 1000, atPcTimeMs: 1000 });
     expect(estimate.valid).toBe(true);
     expect(estimate.quality).toBe("warn");
     expect(estimate.gimbalSource).toBe("bodyFixed");
+  });
+
+  it("rejects shallow depression angles below the quality gate", async () => {
+    const session = new TargetEstimationSession({ terrain });
+    session.push(
+      sample({
+        sampledAtMs: 3000,
+        gimbal: earthGimbal(-2, 0, 0, 3000)
+      })
+    );
+
+    const estimate = await session.estimate({ estimatedAtMs: 3000, atPcTimeMs: 3000 });
+    expect(estimate.valid).toBe(false);
+    expect(estimate.reasons).toContain("horizon_too_shallow");
+  });
+
+  it("estimates against a sloped synthetic terrain plane", async () => {
+    const sloped = new SlopedPlaneTerrainProvider({ elevationAmslM: 400, slopeNorth: 0.1 });
+    const session = new TargetEstimationSession({ terrain: sloped });
+    session.push(
+      sample({
+        sampledAtMs: 4000,
+        gimbal: earthGimbal(-45, 0, 0, 4000)
+      })
+    );
+
+    const estimate = await session.estimate({ estimatedAtMs: 4000, atPcTimeMs: 4000 });
+    expect(estimate.valid).toBe(true);
+    expect(estimate.groundRangeM).toBeGreaterThan(80);
+    expect(estimate.groundRangeM).toBeLessThan(110);
   });
 });

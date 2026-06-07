@@ -61,14 +61,14 @@ export class TargetEstimationSession {
     this.buffer.clear();
   }
 
-  estimate(options: TargetEstimationEstimateOptions = {}): TargetEstimate {
+  estimate(options: TargetEstimationEstimateOptions = {}): Promise<TargetEstimate> {
     const estimatedAtMs = options.estimatedAtMs ?? Date.now();
     if (this.sourceMode !== "live") {
       const blocked = createEmptyTargetEstimate(estimatedAtMs);
       blocked.reasons = ["target_estimation_live_only"];
       blocked.quality = "bad";
       blocked.valid = false;
-      return blocked;
+      return Promise.resolve(blocked);
     }
 
     const atPcTimeMs = options.atPcTimeMs ?? estimatedAtMs - this.settings.videoLatencyMs;
@@ -79,7 +79,7 @@ export class TargetEstimationSession {
       empty.reasons = ["telemetry_stale"];
       empty.quality = "bad";
       empty.valid = false;
-      return empty;
+      return Promise.resolve(empty);
     }
 
     return estimateTargetFromTelemetry({
