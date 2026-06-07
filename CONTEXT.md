@@ -46,6 +46,22 @@ _Avoid_: Artificial horizon (description only), HUD overlay, Drone overlay (reti
 Sidebar **Inst** view — compact SVG gauges (compass, battery, radio, tapes, GPS badge, attitude ball) from **TelemetryState** without new backend fields.
 _Avoid_: Widget panel, gauge mode
 
+**Preflight health**:
+A read-only, operator-facing readiness summary derived purely from **active telemetry** (plus the UI **home reference** and source mode). Aggregates individual **preflight checks** into one of `READY` / `CAUTION` / `NOT_READY` / `UNKNOWN`. Advisory only — it sends no commands and is not the flight controller's pre-arm result.
+_Avoid_: Pre-arm check (that is the FC's own gate), Preflight status (use the full term)
+
+**Preflight check**:
+One evaluated readiness condition (telemetry freshness, GPS, battery, radio, home reference, armed state, system health), each carrying its own status, message, and an `optional` flag that excludes it from global aggregation when its only verdict is `UNKNOWN`.
+_Avoid_: Health check (ambiguous with sensor health)
+
+**Telemetry freshness**:
+The **preflight check** asking whether **active telemetry** is recent enough for the current source mode. Enforced only in `live` (wall-clock vs `lastPacketAt`); skipped as an optional `UNKNOWN` in `replay`/`simulation`, whose timestamps are virtual. Distinct from **Telemetry link** (the serial connection) — never reuse that term here.
+_Avoid_: Telemetry link, Signal, Connection check
+
+**Home reference**:
+The operator's reference point latched by the dashboard from the first valid telemetry coordinate (`App` state), used for home-distance and the home **preflight check**. It is _not_ the flight controller's stored home / EKF origin.
+_Avoid_: Home position (implies FC home), Launch point
+
 ### Source and playback
 
 **Source mode**:
