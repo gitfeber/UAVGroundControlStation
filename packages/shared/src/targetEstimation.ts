@@ -14,6 +14,8 @@ export interface GimbalState {
   source: GimbalAttitudeSource;
   /** Monotonic time when this gimbal snapshot was sampled. */
   sampledAtMs: number;
+  /** MAVLink 285 flags: true when quaternion yaw is earth-referenced. */
+  yawInEarthFrame?: boolean | null;
 }
 
 export type GimbalFrameConvention = "earth" | "body";

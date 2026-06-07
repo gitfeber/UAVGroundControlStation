@@ -35,7 +35,11 @@ export function resolveGimbalAttitude(
 
   const pitchSign = camera.pitchSign === "inverted" ? -1 : 1;
   let yawDeg = resolved.yawDeg + camera.calibrationDeg.yaw;
-  if (camera.yawReference === "vehicle") {
+  const yawInEarthFrame = telemetry.gimbal?.yawInEarthFrame;
+  const needsVehicleYaw =
+    yawInEarthFrame === false ||
+    (yawInEarthFrame == null && camera.yawReference === "vehicle");
+  if (needsVehicleYaw) {
     const vehicleYaw = telemetry.motion.yawDeg ?? telemetry.position.headingDeg ?? 0;
     yawDeg += vehicleYaw;
   }

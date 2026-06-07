@@ -1707,10 +1707,20 @@ mod parser_tests {
         assert!(parser.take_parser_errors() > 0);
     }
 
+    fn build_gimbal_285_payload(time_boot_ms: u32, q: [f32; 4], flags: u16) -> Vec<u8> {
+        let mut payload = vec![0_u8; 47];
+        payload[0..4].copy_from_slice(&time_boot_ms.to_le_bytes());
+        payload[4..8].copy_from_slice(&q[0].to_le_bytes());
+        payload[8..12].copy_from_slice(&q[1].to_le_bytes());
+        payload[12..16].copy_from_slice(&q[2].to_le_bytes());
+        payload[16..20].copy_from_slice(&q[3].to_le_bytes());
+        payload[34..36].copy_from_slice(&flags.to_le_bytes());
+        payload
+    }
+
     #[test]
     fn parses_gimbal_device_attitude_status_frame() {
-        let mut payload = vec![0_u8; 40];
-        payload[8..12].copy_from_slice(&1.0_f32.to_le_bytes());
+        let payload = build_gimbal_285_payload(1000, [1.0, 0.0, 0.0, 0.0], 64);
         let mut sequence = 0_u8;
         let frame = mavlink_v1_packet(285, &payload, 137, &mut sequence);
         let mut parser = MavlinkFrameParser::new();
@@ -1720,13 +1730,20 @@ mod parser_tests {
     }
 
     #[test]
-    fn gimbal_device_attitude_status_updates_telemetry_state() {
+    fn golden_gimbal_285_packet_decodes_identity_quaternion_and_flags() {
+        let payload = build_gimbal_285_payload(500, [1.0, 0.0, 0.0, 0.0], 64);
+        let mut sequence = 0_u8;
+        let frame = mavlink_v1_packet(285, &payload, 137, &mut sequence);
+        let mut parser = MavlinkFrameParser::new();
+        let frames = parser.push_isolated(&frame);
+        assert_eq!(frames.len(), 1);
+
         let mut telemetry = initial_telemetry();
-        let mut payload = vec![0_u8; 40];
-        payload[8..12].copy_from_slice(&1.0_f32.to_le_bytes());
-        update_gimbal_device_attitude_status(&mut telemetry, &payload);
+        update_gimbal_device_attitude_status(&mut telemetry, &frames[0].payload);
         let gimbal = telemetry.gimbal.expect("gimbal");
         assert_eq!(gimbal.source, "mavlink285");
+        assert!(gimbal.yaw_deg.abs() < 0.01);
+        assert_eq!(gimbal.yaw_in_earth_frame, Some(true));
         assert!(telemetry.sampled_at_ms.is_some());
     }
 }
