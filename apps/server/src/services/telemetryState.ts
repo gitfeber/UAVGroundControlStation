@@ -8,6 +8,7 @@ export function createInitialTelemetryState(): TelemetryState {
   return {
     connected: false,
     lastPacketAt: null,
+    sampledAtMs: null,
     packetCount: 0,
     vehicle: {
       systemId: null,
@@ -67,7 +68,8 @@ export function createInitialTelemetryState(): TelemetryState {
       minRssi: null,
       warningCount: 0,
       sessionStartedAt: Date.now()
-    }
+    },
+    gimbal: null
   };
 }
 

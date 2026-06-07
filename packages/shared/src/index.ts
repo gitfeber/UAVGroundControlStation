@@ -1,3 +1,5 @@
+import type { GimbalState } from "./targetEstimation.js";
+
 export interface SerialPortInfo {
   path: string;
   manufacturer?: string;
@@ -39,9 +41,35 @@ export interface ConnectRequest {
   baudRate?: number;
 }
 
+export type {
+  AltitudeMode,
+  CameraConfig,
+  EnuTuple,
+  GimbalAttitudeSource,
+  GimbalFrameConvention,
+  GimbalState,
+  PitchSignConvention,
+  TargetEstimate,
+  TargetEstimateInvalidReason,
+  TargetEstimateQuality,
+  TargetEstimationSettings,
+  TerrainElevationSample,
+  TerrainMetadata,
+  TerrainProvider,
+  TerrainRaySample,
+  YawReferenceConvention
+} from "./targetEstimation.js";
+export {
+  createEmptyTargetEstimate,
+  DEFAULT_CAMERA_CONFIG,
+  DEFAULT_TARGET_ESTIMATION_SETTINGS
+} from "./targetEstimation.js";
+
 export interface TelemetryState {
   connected: boolean;
   lastPacketAt: number | null;
+  /** Monotonic sample time for target-estimation buffer lookup. */
+  sampledAtMs: number | null;
   packetCount: number;
 
   vehicle: {
@@ -115,6 +143,9 @@ export interface TelemetryState {
     warningCount: number;
     sessionStartedAt: number;
   };
+
+  /** Normalized gimbal attitude for target estimation; null when unavailable. */
+  gimbal: GimbalState | null;
 }
 
 export interface TelemetryEnvelope {
