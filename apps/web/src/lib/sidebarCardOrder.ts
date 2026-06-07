@@ -7,11 +7,13 @@ export type SidebarCardId =
   | "battery"
   | "radio"
   | "system"
-  | "session";
+  | "session"
+  | "groundTarget";
 
 /** Recommended flight-priority order (armed/mode → motion → attitude/heading → nav → power/link → FC → session). */
 export const DEFAULT_SIDEBAR_ORDER: SidebarCardId[] = [
   "vehicle",
+  "groundTarget",
   "motion",
   "attitude",
   "compass",
@@ -27,6 +29,7 @@ const LEGACY_KEYS = ["uav-gcs.sidebar.order.text", "uav-gcs.sidebar.order.instru
 
 const TEXT_VISIBLE = new Set<SidebarCardId>([
   "vehicle",
+  "groundTarget",
   "attitude",
   "gps",
   "battery",

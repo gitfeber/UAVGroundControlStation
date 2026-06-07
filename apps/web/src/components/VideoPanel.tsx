@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import type { TargetEstimate } from "@uav-ground-control-station/shared";
+import { formatNumber } from "../lib/format";
+import { Badge } from "./Panel";
 
 type VideoKind = "mjpeg" | "hls" | "webrtc";
 
 const defaultUrl = import.meta.env.VITE_VIDEO_URL ?? "";
 const defaultKind = (import.meta.env.VITE_VIDEO_KIND as VideoKind | undefined) ?? "mjpeg";
 
-export function VideoPanel() {
+interface VideoPanelProps {
+  estimate: TargetEstimate | null;
+}
+
+export function VideoPanel({ estimate }: VideoPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [url, setUrl] = useState(() => localStorage.getItem("uav-gcs.video.url") ?? defaultUrl);
   const [kind, setKind] = useState<VideoKind>(() => (localStorage.getItem("uav-gcs.video.kind") as VideoKind | null) ?? defaultKind);
@@ -66,8 +73,14 @@ export function VideoPanel() {
 
       {!collapsed && (
         <>
-          <div className="h-[220px] bg-black">
+          <div className="relative h-[220px] bg-black">
             {url ? <VideoContent url={url} kind={kind} /> : <div className="flex h-full items-center justify-center text-sm text-slate-500">No video source configured</div>}
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="h-10 w-10 rounded-full border border-cyan-200/70" />
+              <div className="absolute h-12 w-px bg-cyan-200/70" />
+              <div className="absolute h-px w-12 bg-cyan-200/70" />
+            </div>
+            <VideoTargetStrip estimate={estimate} />
           </div>
           <div className="grid grid-cols-[90px_1fr] gap-2 border-t border-line p-2">
             <select className="input-dark" value={kind} onChange={(event) => setKind(event.target.value as VideoKind)}>
@@ -80,6 +93,21 @@ export function VideoPanel() {
         </>
       )}
     </section>
+  );
+}
+
+function VideoTargetStrip({ estimate }: { estimate: TargetEstimate | null }) {
+  const showCoords = estimate && (estimate.valid || estimate.quality === "warn") && estimate.lat !== null && estimate.lon !== null;
+  const tone = estimate?.quality === "good" ? "good" : estimate?.quality === "warn" ? "warn" : "bad";
+
+  return (
+    <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 border-t border-cyan-300/20 bg-slate-950/85 px-2 py-1.5 text-[10px]">
+      <div className="min-w-0 truncate font-mono text-slate-200">
+        {showCoords ? `${formatNumber(estimate.lat, 5)}, ${formatNumber(estimate.lon, 5)}` : "Target --"}
+      </div>
+      <div className="shrink-0 font-mono text-slate-400">{formatNumber(estimate?.slantRangeM, 0, " m")}</div>
+      <Badge tone={estimate ? tone : "neutral"}>{estimate?.quality ?? "idle"}</Badge>
+    </div>
   );
 }
 

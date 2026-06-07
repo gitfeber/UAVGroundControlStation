@@ -170,7 +170,11 @@ Real elevation for **ground target estimation** is desktop-only (see [`docs/adr/
 | `get_elevation_at_enu` | ENU elevation relative to estimate anchor |
 | `get_elevations_along_ray` | Batched samples for target-estimation ray marching |
 
-Frontend wrapper: [`apps/web/src/lib/tauriDemTerrain.ts`](apps/web/src/lib/tauriDemTerrain.ts) (`TauriDemTerrainProvider`). Browser dev continues to use synthetic terrain only until the UI milestone wires this in.
+Frontend wrapper: [`apps/web/src/lib/tauriDemTerrain.ts`](apps/web/src/lib/tauriDemTerrain.ts) (`TauriDemTerrainProvider`). Browser dev continues to use synthetic terrain only.
+
+### Ground target estimation (live)
+
+Ground target estimation (image center) runs in **live** mode only. Use the sortable **Ground Target** sidebar card for full readout and settings (`localStorage` keys `uav-gcs.target.*`). The camera panel shows a crosshair plus compact lat/lon, slant range, and quality. Valid or warn estimates also draw an orange map marker and dashed line-of-sight from the UAV. Desktop: paste or load a local GeoTIFF path in the sidebar; browser dev uses synthetic flat terrain.
 
 ## Configuration (browser stack)
 

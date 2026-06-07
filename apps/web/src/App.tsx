@@ -4,6 +4,7 @@ import { evaluatePreflightHealth } from "./lib/preflight";
 import { haversineDistanceM, type Coordinate, validCoordinate } from "./lib/geo";
 import { packetAge } from "./lib/format";
 import { useTelemetrySource } from "./hooks/useTelemetrySource";
+import { useTargetEstimation } from "./hooks/useTargetEstimation";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { MapPanel } from "./components/MapPanel";
 import { TelemetrySidebar } from "./components/TelemetrySidebar";
@@ -35,6 +36,7 @@ export function App() {
     liveConnectedInBackground,
     replay
   } = useTelemetrySource();
+  const targetEstimation = useTargetEstimation(telemetry, activeSourceMode);
 
   const [home, setHome] = useState<Coordinate | null>(null);
   const coordinate = validCoordinate(telemetry.position?.lat, telemetry.position?.lon);
@@ -98,18 +100,25 @@ export function App() {
       {activeSourceMode !== "live" && <NonLiveBanner mode={activeSourceMode} />}
 
       <div className={`relative flex min-h-0 flex-1 ${dashboardTint(activeSourceMode)}`}>
-        <TelemetrySidebar telemetry={telemetry} distanceFromHome={distanceFromHome} alerts={alerts} preflight={preflight} />
+        <TelemetrySidebar
+          telemetry={telemetry}
+          distanceFromHome={distanceFromHome}
+          alerts={alerts}
+          preflight={preflight}
+          targetEstimation={targetEstimation}
+        />
         <ErrorBoundary>
           <MapPanel
             telemetry={telemetry}
             coordinate={coordinate}
             home={home}
+            groundTarget={targetEstimation.estimate}
             trackMode={isControlledTrack ? "controlled" : "internal"}
             controlledTrack={replay.replayTrack}
           />
         </ErrorBoundary>
         <ActivityLogPanel logs={logs} messages={status.mavlinkMessages ?? []} onClear={clearLogs} />
-        <VideoPanel />
+        <VideoPanel estimate={targetEstimation.estimate} />
 
         {activeSourceMode !== "live" && (
           <div className="absolute right-4 top-4 z-20">
