@@ -11,9 +11,12 @@ pub struct GimbalState {
     pub yaw_in_earth_frame: Option<bool>,
 }
 
+use crate::fixtures::gimbal_285::{
+    GIMBAL_DEVICE_FLAGS_YAW_IN_EARTH_FRAME, GIMBAL_DEVICE_FLAGS_YAW_IN_VEHICLE_FRAME,
+    offsets as gimbal_285_offsets,
+};
+
 const GIMBAL_DEVICE_FLAGS_YAW_LOCK: u16 = 16;
-const GIMBAL_DEVICE_FLAGS_YAW_IN_VEHICLE_FRAME: u16 = 32;
-const GIMBAL_DEVICE_FLAGS_YAW_IN_EARTH_FRAME: u16 = 64;
 
 pub fn decode_gimbal_device_attitude_status(payload: &[u8], sampled_at_ms: u64) -> Option<GimbalState> {
     if payload.len() < 36 {
@@ -21,12 +24,12 @@ pub fn decode_gimbal_device_attitude_status(payload: &[u8], sampled_at_ms: u64) 
     }
 
     let q = [
-        read_f32(payload, 4)?,
-        read_f32(payload, 8)?,
-        read_f32(payload, 12)?,
-        read_f32(payload, 16)?,
+        read_f32(payload, gimbal_285_offsets::Q_W)?,
+        read_f32(payload, gimbal_285_offsets::Q_X)?,
+        read_f32(payload, gimbal_285_offsets::Q_Y)?,
+        read_f32(payload, gimbal_285_offsets::Q_Z)?,
     ];
-    let flags = read_u16(payload, 34)?;
+    let flags = read_u16(payload, gimbal_285_offsets::FLAGS)?;
     let (roll_deg, pitch_deg, yaw_deg) = quaternion_to_euler_deg(q);
 
     Some(GimbalState {
@@ -136,22 +139,14 @@ fn normalize_heading(value: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn build_285_payload(time_boot_ms: u32, q: [f32; 4], flags: u16) -> Vec<u8> {
-        let mut payload = vec![0_u8; 47];
-        payload[0..4].copy_from_slice(&time_boot_ms.to_le_bytes());
-        payload[4..8].copy_from_slice(&q[0].to_le_bytes());
-        payload[8..12].copy_from_slice(&q[1].to_le_bytes());
-        payload[12..16].copy_from_slice(&q[2].to_le_bytes());
-        payload[16..20].copy_from_slice(&q[3].to_le_bytes());
-        payload[34..36].copy_from_slice(&flags.to_le_bytes());
-        payload
-    }
+    use crate::fixtures::gimbal_285::{
+        PAYLOAD_IDENTITY_EARTH_FRAME, PAYLOAD_IDENTITY_VEHICLE_FRAME,
+    };
 
     #[test]
-    fn decodes_gimbal_device_quaternion_payload_at_mavlink_offsets() {
-        let payload = build_285_payload(1000, [1.0, 0.0, 0.0, 0.0], GIMBAL_DEVICE_FLAGS_YAW_IN_EARTH_FRAME);
-        let sample = decode_gimbal_device_attitude_status(&payload, 1234).expect("sample");
+    fn decodes_documented_identity_earth_frame_fixture() {
+        let sample =
+            decode_gimbal_device_attitude_status(&PAYLOAD_IDENTITY_EARTH_FRAME, 1234).expect("sample");
         assert_eq!(sample.source, "mavlink285");
         assert!(sample.roll_deg.abs() < 0.01);
         assert!(sample.pitch_deg.abs() < 0.01);
@@ -160,9 +155,9 @@ mod tests {
     }
 
     #[test]
-    fn decodes_vehicle_frame_flag_from_gimbal_device_status() {
-        let payload = build_285_payload(1000, [1.0, 0.0, 0.0, 0.0], GIMBAL_DEVICE_FLAGS_YAW_IN_VEHICLE_FRAME);
-        let sample = decode_gimbal_device_attitude_status(&payload, 1234).expect("sample");
+    fn decodes_documented_vehicle_frame_fixture() {
+        let sample =
+            decode_gimbal_device_attitude_status(&PAYLOAD_IDENTITY_VEHICLE_FRAME, 1234).expect("sample");
         assert_eq!(sample.yaw_in_earth_frame, Some(false));
     }
 

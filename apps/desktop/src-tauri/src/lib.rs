@@ -17,6 +17,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 mod crsf;
 mod dem;
+mod fixtures;
 mod gimbal;
 
 #[derive(Clone, Serialize)]
@@ -1699,20 +1700,9 @@ mod parser_tests {
         assert!(parser.take_parser_errors() > 0);
     }
 
-    fn build_gimbal_285_payload(time_boot_ms: u32, q: [f32; 4], flags: u16) -> Vec<u8> {
-        let mut payload = vec![0_u8; 47];
-        payload[0..4].copy_from_slice(&time_boot_ms.to_le_bytes());
-        payload[4..8].copy_from_slice(&q[0].to_le_bytes());
-        payload[8..12].copy_from_slice(&q[1].to_le_bytes());
-        payload[12..16].copy_from_slice(&q[2].to_le_bytes());
-        payload[16..20].copy_from_slice(&q[3].to_le_bytes());
-        payload[34..36].copy_from_slice(&flags.to_le_bytes());
-        payload
-    }
-
     #[test]
     fn parses_gimbal_device_attitude_status_frame() {
-        let payload = build_gimbal_285_payload(1000, [1.0, 0.0, 0.0, 0.0], 64);
+        let payload = fixtures::gimbal_285::PAYLOAD_IDENTITY_EARTH_FRAME;
         let mut sequence = 0_u8;
         let frame = mavlink_v1_packet(285, &payload, 137, &mut sequence);
         let mut parser = MavlinkFrameParser::new();
@@ -1722,13 +1712,14 @@ mod parser_tests {
     }
 
     #[test]
-    fn golden_gimbal_285_packet_decodes_identity_quaternion_and_flags() {
-        let payload = build_gimbal_285_payload(500, [1.0, 0.0, 0.0, 0.0], 64);
+    fn golden_gimbal_285_fixture_packet_decodes_identity_quaternion_and_flags() {
+        let payload = fixtures::gimbal_285::PAYLOAD_IDENTITY_EARTH_FRAME;
         let mut sequence = 0_u8;
         let frame = mavlink_v1_packet(285, &payload, 137, &mut sequence);
         let mut parser = MavlinkFrameParser::new();
         let frames = parser.push_isolated(&frame);
         assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].payload, payload);
 
         let mut telemetry = initial_telemetry();
         update_gimbal_device_attitude_status(&mut telemetry, &frames[0].payload);
