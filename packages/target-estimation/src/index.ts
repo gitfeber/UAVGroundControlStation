@@ -1,6 +1,7 @@
 export { lerpAngleDeg, interpolateTelemetryState } from "./interpolate.js";
 export { estimateTargetFromTelemetry, type EstimateTargetInput } from "./estimateTarget.js";
 export { FlatTerrainProvider, type FlatTerrainProviderOptions } from "./flatTerrain.js";
+export { MissingDemTerrainProvider } from "./missingDemTerrain.js";
 export { intersectRayWithTerrain, type RayIntersectFailureReason, type RayIntersectOptions, type RayIntersectionHit, type RayIntersectResult } from "./rayIntersect.js";
 export { SlopedPlaneTerrainProvider, type SlopedPlaneTerrainProviderOptions } from "./slopedTerrain.js";
 export { terrainAmslAt, type AnchorTerrainProvider } from "./terrainUtils.js";

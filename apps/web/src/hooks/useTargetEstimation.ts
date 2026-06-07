@@ -11,6 +11,7 @@ import {
   exportTargetSampleLogCsv,
   exportTargetSampleLogJson,
   FlatTerrainProvider,
+  MissingDemTerrainProvider,
   TargetEstimationSession
 } from "@uav-ground-control-station/target-estimation";
 import { loadTargetEstimationSettings, loadTerrainModelPath, saveTargetEstimationSettings, saveTerrainModelPath } from "../lib/targetSettings";
@@ -61,7 +62,9 @@ export function useTargetEstimation(
   const [sampleLogCount, setSampleLogCount] = useState(0);
   const [sampleLogCapacity, setSampleLogCapacity] = useState(600);
   const sessionRef = useRef<TargetEstimationSession | null>(null);
-  const terrainRef = useRef<TerrainProvider>(new FlatTerrainProvider({ elevationAmslM: 0 }));
+  const terrainRef = useRef<TerrainProvider>(
+    runtimeMode() === "desktop" ? new MissingDemTerrainProvider() : new FlatTerrainProvider({ elevationAmslM: 0 })
+  );
   const tauriTerrainRef = useRef<TauriDemTerrainProvider | null>(null);
 
   const ensureSession = useCallback(() => {
@@ -94,8 +97,16 @@ export function useTargetEstimation(
   }, [ensureSession]);
 
   useEffect(() => {
-    if (mode !== "desktop" || !terrainPath.trim()) {
+    if (mode !== "desktop") {
       terrainRef.current = new FlatTerrainProvider({ elevationAmslM: 0 });
+      tauriTerrainRef.current = null;
+      setTerrainMetadata(null);
+      ensureSession();
+      return;
+    }
+
+    if (!terrainPath.trim()) {
+      terrainRef.current = new MissingDemTerrainProvider();
       tauriTerrainRef.current = null;
       setTerrainMetadata(null);
       ensureSession();
@@ -113,7 +124,7 @@ export function useTargetEstimation(
         ensureSession();
       } catch {
         if (cancelled) return;
-        terrainRef.current = new FlatTerrainProvider({ elevationAmslM: 0 });
+        terrainRef.current = new MissingDemTerrainProvider();
         tauriTerrainRef.current = null;
         setTerrainMetadata(null);
         ensureSession();
@@ -194,7 +205,7 @@ export function useTargetEstimation(
       await clearDesktopTerrainModel();
     }
     setTerrainPathState("");
-    terrainRef.current = new FlatTerrainProvider({ elevationAmslM: 0 });
+    terrainRef.current = new MissingDemTerrainProvider();
     tauriTerrainRef.current = null;
     setTerrainMetadata(null);
     ensureSession();

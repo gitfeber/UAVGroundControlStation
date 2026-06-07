@@ -23,12 +23,26 @@ export interface EstimateTargetInput {
   telemetrySampledAtMs: number;
 }
 
+function isDemLoaded(terrain: TerrainProvider): boolean {
+  if ("demLoaded" in terrain && terrain.demLoaded === false) {
+    return false;
+  }
+  return true;
+}
+
 export async function estimateTargetFromTelemetry(input: EstimateTargetInput): Promise<TargetEstimate> {
   const { telemetry, lookup, terrain, settings, estimatedAtMs, telemetrySampledAtMs } = input;
   const estimate = createEmptyTargetEstimate(estimatedAtMs);
   estimate.telemetrySampledAtMs = telemetrySampledAtMs;
 
   const reasons: TargetEstimateInvalidReason[] = [];
+
+  if (!isDemLoaded(terrain)) {
+    estimate.reasons = ["dem_not_loaded"];
+    estimate.quality = "bad";
+    estimate.valid = false;
+    return estimate;
+  }
 
   if (lookup.trailingGapMs !== null && lookup.trailingGapMs > STALE_TELEMETRY_WARN_MS) {
     reasons.push("telemetry_stale");

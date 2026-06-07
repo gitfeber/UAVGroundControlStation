@@ -52,6 +52,7 @@ export interface TerrainMetadata {
 export type TargetEstimateQuality = "good" | "warn" | "bad";
 
 export type TargetEstimateInvalidReason =
+  | "dem_not_loaded"
   | "gimbal_unavailable"
   | "dem_out_of_coverage"
   | "dem_nodata"
