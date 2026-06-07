@@ -3,6 +3,7 @@ dist/
 target/
 .vite/
 coverage/
+*.tsbuildinfo
 *.log
 logs/*.jsonl
 .env
