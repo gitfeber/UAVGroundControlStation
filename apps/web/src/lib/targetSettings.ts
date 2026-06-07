@@ -1,4 +1,5 @@
 import {
+  DEFAULT_RAYCAST_CONFIG,
   DEFAULT_TARGET_ESTIMATION_SETTINGS,
   type TargetEstimationSettings
 } from "@uav-ground-control-station/shared";
@@ -26,6 +27,10 @@ export function loadTargetEstimationSettings(): TargetEstimationSettings {
           ...DEFAULT_TARGET_ESTIMATION_SETTINGS.camera.calibrationDeg,
           ...parsed.camera?.calibrationDeg
         }
+      },
+      raycast: {
+        ...DEFAULT_RAYCAST_CONFIG,
+        ...parsed.raycast
       }
     };
   } catch {

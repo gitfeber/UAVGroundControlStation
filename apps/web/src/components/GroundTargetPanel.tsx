@@ -122,6 +122,151 @@ export function GroundTargetPanel({
           Allow body-fixed camera fallback
         </label>
 
+        <div className="grid grid-cols-3 gap-2">
+          <label className="block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+            Roll cal (deg)
+            <input
+              className="input-dark mt-1 w-full"
+              type="number"
+              step={0.1}
+              value={settings.camera.calibrationDeg.roll}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  camera: {
+                    ...settings.camera,
+                    calibrationDeg: {
+                      ...settings.camera.calibrationDeg,
+                      roll: Number(event.target.value) || 0
+                    }
+                  }
+                })
+              }
+            />
+          </label>
+          <label className="block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+            Pitch cal (deg)
+            <input
+              className="input-dark mt-1 w-full"
+              type="number"
+              step={0.1}
+              value={settings.camera.calibrationDeg.pitch}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  camera: {
+                    ...settings.camera,
+                    calibrationDeg: {
+                      ...settings.camera.calibrationDeg,
+                      pitch: Number(event.target.value) || 0
+                    }
+                  }
+                })
+              }
+            />
+          </label>
+          <label className="block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+            Yaw cal (deg)
+            <input
+              className="input-dark mt-1 w-full"
+              type="number"
+              step={0.1}
+              value={settings.camera.calibrationDeg.yaw}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  camera: {
+                    ...settings.camera,
+                    calibrationDeg: {
+                      ...settings.camera.calibrationDeg,
+                      yaw: Number(event.target.value) || 0
+                    }
+                  }
+                })
+              }
+            />
+          </label>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+            Max raycast (m)
+            <input
+              className="input-dark mt-1 w-full"
+              type="number"
+              min={100}
+              step={100}
+              value={settings.raycast.maxRangeM}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  raycast: {
+                    ...settings.raycast,
+                    maxRangeM: Math.max(100, Number(event.target.value) || 100)
+                  }
+                })
+              }
+            />
+          </label>
+          <label className="block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+            Raycast step (m)
+            <input
+              className="input-dark mt-1 w-full"
+              type="number"
+              min={1}
+              step={1}
+              value={settings.raycast.stepM}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  raycast: {
+                    ...settings.raycast,
+                    stepM: Math.max(1, Number(event.target.value) || 1)
+                  }
+                })
+              }
+            />
+          </label>
+          <label className="block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+            Min down angle (deg)
+            <input
+              className="input-dark mt-1 w-full"
+              type="number"
+              min={0}
+              step={0.5}
+              value={settings.raycast.minDownAngleDeg}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  raycast: {
+                    ...settings.raycast,
+                    minDownAngleDeg: Math.max(0, Number(event.target.value) || 0)
+                  }
+                })
+              }
+            />
+          </label>
+          <label className="block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+            Stale telemetry (ms)
+            <input
+              className="input-dark mt-1 w-full"
+              type="number"
+              min={100}
+              step={50}
+              value={settings.raycast.staleTelemetryWarnMs}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  raycast: {
+                    ...settings.raycast,
+                    staleTelemetryWarnMs: Math.max(100, Number(event.target.value) || 100)
+                  }
+                })
+              }
+            />
+          </label>
+        </div>
+
         {runtimeMode === "desktop" ? (
           <div className="space-y-2">
             <label className="block text-[10px] uppercase tracking-[0.16em] text-slate-500">Terrain model (GeoTIFF)</label>
