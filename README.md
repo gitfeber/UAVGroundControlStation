@@ -95,7 +95,7 @@ pnpm install
 2. Download the asset for your OS (Windows `.msi` / setup `.exe`, or Linux `.deb` / `.AppImage`).
 3. Install and launch **UAV Ground Control Station**.
 
-Each push to `main` runs tests first; if they pass, CI publishes a **prerelease** with Windows and Linux installers (tag like `v0.1.8-build.42`, job `publish` in [`.github/workflows/ci.yml`](.github/workflows/ci.yml)). **Stable** releases use a version tag such as `v0.1.8` (see [`.github/workflows/release.yml`](.github/workflows/release.yml)).
+Each push to `main` runs tests first; if they pass, CI publishes a **preview prerelease** with Windows and Linux installers (tag like `v0.2.1-build.42`, job `publish` in [`.github/workflows/ci.yml`](.github/workflows/ci.yml)). **Stable** releases use a version tag such as `v0.2.1` (see [`.github/workflows/release.yml`](.github/workflows/release.yml) and the [release process](#release-process) below).
 
 **From source:**
 
@@ -113,11 +113,11 @@ Artifacts: `apps/desktop/src-tauri/target/release/bundle/`
 
 **Maintainers — stable release (optional):**
 
-Automatic prereleases happen on every green `main` push. For a non-prerelease “stable” release:
+Automatic preview prereleases happen on every green `main` push. For a non-prerelease “stable” release:
 
 ```bash
-git tag v0.1.8
-git push origin v0.1.8
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 The release workflow builds **Windows** and **Linux** installers and attaches them to the GitHub release (no macOS builds in CI). You can also trigger it manually under **Actions → Release → Run workflow**.
@@ -183,6 +183,31 @@ pnpm build:desktop  # desktop installer
 If you open the repository root in VS Code, rust-analyzer is configured via [.vscode/settings.json](.vscode/settings.json) to use the Tauri crate at [apps/desktop/src-tauri/Cargo.toml](apps/desktop/src-tauri/Cargo.toml).
 
 Agent and architecture rules: [`AGENTS.md`](AGENTS.md).
+
+## Release process
+
+Three workflows split the responsibilities, so it is always clear what publishes a release and what does not:
+
+| Workflow | Trigger | Publishes? |
+|----------|---------|------------|
+| [`branch-checks.yml`](.github/workflows/branch-checks.yml) | Pull requests | No — validation only (typecheck, lint, tests, build) |
+| [`ci.yml`](.github/workflows/ci.yml) | Push to `main`/`master` | **Preview prerelease** (tag `v<version>-build.<run>`) after tests pass |
+| [`release.yml`](.github/workflows/release.yml) | Pushed `v*` tag or manual dispatch | **Stable release** (`prerelease: false`) |
+
+In short:
+
+- **Pull requests** run `branch-checks.yml` and never publish.
+- **Merges to `main`** automatically create a **preview prerelease** with Windows and Linux installers, clearly marked as an automated build.
+- **Stable releases** are created by pushing a semantic version tag:
+
+  ```bash
+  git tag v0.2.1
+  git push origin v0.2.1
+  ```
+
+You can also start the stable **Release** workflow manually from the GitHub **Actions** tab (**Actions → Release → Run workflow**).
+
+Both `ci.yml` and `release.yml` set `generateReleaseNotes: true`, so GitHub appends auto-generated notes grouped by the categories defined in [`.github/release.yml`](.github/release.yml) (Features, Fixes, Documentation, Maintenance, Dependencies, Other Changes).
 
 ## Project structure
 

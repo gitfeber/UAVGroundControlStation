@@ -131,15 +131,33 @@ jobs:
           projectPath: apps/desktop
           tauriScript: pnpm exec tauri
           tagName: v__VERSION__-build.${{ github.run_number }}
-          releaseName: UAV Ground Control Station v__VERSION__ (build ${{ github.run_number }})
+          releaseName: UAV Ground Control Station v__VERSION__ Preview Build ${{ github.run_number }}
+          generateReleaseNotes: true
           releaseBody: |
-            Automated prerelease from `main` after CI passed (commit `${{ github.sha }}`).
+            ## Preview Build
 
-            | Platform | Typical artifact |
-            |----------|------------------|
+            Automated preview build of the **UAV Ground Control Station** desktop app,
+            published after CI passed on the source branch.
+
+            | Detail | Value |
+            |--------|-------|
+            | Source branch | `${{ github.ref_name }}` |
+            | Commit | `${{ github.sha }}` |
+            | Run number | `${{ github.run_number }}` |
+
+            ### Downloads
+
+            | Platform | Artifact |
+            |----------|----------|
             | Windows | `.msi` (WiX) and/or `.exe` (NSIS setup) |
             | Linux | `.deb`, `.AppImage`, and/or `.rpm` |
 
-            For a stable release, push a version tag such as `v0.1.8`.
+            > ⚠️ **This is an automated prerelease.** It is built from the latest
+            > `main`/`master` commit and may be less stable than a tagged release.
+            > Use it for testing and previewing changes, not for production flights.
+
+            Stable, user-facing releases are created from semantic version tags such
+            as `v0.2.1`. See the [release process](https://github.com/${{ github.repository }}#release-process)
+            for details.
           releaseDraft: false
           prerelease: true

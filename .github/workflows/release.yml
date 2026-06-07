@@ -9,9 +9,14 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# Default to read-only; the publish job opts up to contents: write where needed.
+permissions:
+  contents: read
+
 jobs:
   node:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
@@ -37,6 +42,7 @@ jobs:
 
   rust:
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: apps/desktop/src-tauri
@@ -60,6 +66,7 @@ jobs:
     needs: [node, rust]
     permissions:
       contents: write
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -120,14 +127,47 @@ jobs:
           tauriScript: pnpm exec tauri
           tagName: v__VERSION__
           releaseName: UAV Ground Control Station v__VERSION__
+          generateReleaseNotes: true
           releaseBody: |
-            Desktop installers for Windows and Linux.
+            **UAV Ground Control Station** is a local ground control station for UAVs —
+            map, telemetry, and serial link in one dashboard. This stable release ships
+            signed desktop installers for Windows and Linux.
 
-            | Platform | Typical artifact |
-            |----------|------------------|
-            | Windows | `.msi` (WiX) and/or `.exe` (NSIS setup) |
-            | Linux | `.deb`, `.AppImage`, and/or `.rpm` |
+            ### Downloads
 
-            Pick the installer for your OS, run it, then connect your serial link from the dashboard.
+            | Platform | Artifact | Notes |
+            |----------|----------|-------|
+            | Windows | `.msi` (WiX) | Recommended installer for most Windows users |
+            | Windows | `.exe` (NSIS setup) | Alternative setup installer |
+            | Linux | `.AppImage` | Portable, no installation required — `chmod +x` and run |
+            | Linux | `.deb` | For Debian/Ubuntu-based distributions |
+
+            ### Installation
+
+            - **Windows:** download the `.msi`, run it, and follow the installer. Windows
+              SmartScreen may warn about an unrecognized publisher — choose **More info →
+              Run anyway** if you trust this source.
+            - **Linux (.AppImage):** `chmod +x UAV-Ground-Control-Station_*.AppImage` then
+              run it directly. No system installation is required.
+            - **Linux (.deb):** `sudo apt install ./uav-ground-control-station_*.deb`.
+
+            ### Which artifact should I choose?
+
+            - On **Windows**, prefer the **`.msi`** installer; use the `.exe` setup only if
+              the MSI does not work in your environment.
+            - On **Linux**, prefer the **`.AppImage`** for a portable, distro-agnostic
+              option, or the **`.deb`** if you want a managed system package on
+              Debian/Ubuntu.
+
+            After installing, launch **UAV Ground Control Station**, then connect your
+            serial link (e.g. TX16S at 420000 baud, CRSF-first) from the dashboard.
+
+            ### Support & troubleshooting
+
+            If a link shows "Serial linked" but no telemetry appears, it is usually the
+            wrong baud rate or runtime — see the
+            [Operator notes](https://github.com/${{ github.repository }}#operator-notes)
+            in the README. Found a bug? Please
+            [open an issue](https://github.com/${{ github.repository }}/issues).
           releaseDraft: false
           prerelease: false
