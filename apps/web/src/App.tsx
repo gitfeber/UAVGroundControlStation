@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getAlerts } from "./lib/alerts";
+import { evaluatePreflightHealth } from "./lib/preflight";
 import { haversineDistanceM, type Coordinate, validCoordinate } from "./lib/geo";
 import { packetAge } from "./lib/format";
 import { useTelemetrySource } from "./hooks/useTelemetrySource";
@@ -57,6 +58,11 @@ export function App() {
 
   const alerts = useMemo(() => getAlerts(telemetry, status), [telemetry, status]);
 
+  const preflight = useMemo(
+    () => evaluatePreflightHealth(telemetry, Date.now(), { sourceMode: activeSourceMode, home }),
+    [telemetry, activeSourceMode, home]
+  );
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
       <Topbar
@@ -82,7 +88,7 @@ export function App() {
       {activeSourceMode !== "live" && <NonLiveBanner mode={activeSourceMode} />}
 
       <div className={`relative flex min-h-0 flex-1 ${dashboardTint(activeSourceMode)}`}>
-        <TelemetrySidebar telemetry={telemetry} distanceFromHome={distanceFromHome} alerts={alerts} />
+        <TelemetrySidebar telemetry={telemetry} distanceFromHome={distanceFromHome} alerts={alerts} preflight={preflight} />
         <ErrorBoundary>
           <MapPanel
             telemetry={telemetry}
