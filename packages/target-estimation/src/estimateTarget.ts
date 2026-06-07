@@ -1,5 +1,6 @@
 import {
   createEmptyTargetEstimate,
+  DEFAULT_RAYCAST_CONFIG,
   type EnuTuple,
   type TargetEstimate,
   type TargetEstimateInvalidReason,
@@ -12,9 +13,7 @@ import { enuDeltaToGeodetic, normalizeVector } from "./geo.js";
 import {
   aggregateTargetQuality,
   DEFAULT_GPS_FEW_SATELLITES_WARN,
-  DEFAULT_GPS_LOW_ACCURACY_EPH_M,
-  DEFAULT_MIN_DEPRESSION_DEG,
-  DEFAULT_STALE_TELEMETRY_WARN_MS
+  DEFAULT_GPS_LOW_ACCURACY_EPH_M
 } from "./quality.js";
 import { intersectRayWithTerrain } from "./rayIntersect.js";
 import type { TelemetryLookupResult } from "./telemetryBuffer.js";
@@ -36,14 +35,19 @@ function isDemLoaded(terrain: TerrainProvider): boolean {
   return true;
 }
 
-function collectGpsWarnReasons(telemetry: TelemetryState): TargetEstimateInvalidReason[] {
+function collectGpsWarnReasons(
+  telemetry: TelemetryState,
+  raycast: TargetEstimationSettings["raycast"]
+): TargetEstimateInvalidReason[] {
   const reasons: TargetEstimateInvalidReason[] = [];
   const { eph, satellites } = telemetry.gps;
+  const maxEph = raycast.gpsLowAccuracyEphM ?? DEFAULT_GPS_LOW_ACCURACY_EPH_M;
+  const minSats = raycast.gpsFewSatellitesWarn ?? DEFAULT_GPS_FEW_SATELLITES_WARN;
 
-  if (eph !== null && eph > DEFAULT_GPS_LOW_ACCURACY_EPH_M) {
+  if (eph !== null && eph > maxEph) {
     reasons.push("gps_low_accuracy");
   }
-  if (satellites !== null && satellites < DEFAULT_GPS_FEW_SATELLITES_WARN) {
+  if (satellites !== null && satellites < minSats) {
     reasons.push("gps_few_satellites");
   }
   return reasons;
@@ -55,8 +59,10 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
   estimate.telemetrySampledAtMs = telemetrySampledAtMs;
 
   const reasons: TargetEstimateInvalidReason[] = [];
+  const raycast = { ...DEFAULT_RAYCAST_CONFIG, ...settings.raycast };
+  const staleThresholdMs = raycast.staleTelemetryWarnMs;
 
-  if (lookup.trailingGapMs !== null && lookup.trailingGapMs > DEFAULT_STALE_TELEMETRY_WARN_MS) {
+  if (lookup.trailingGapMs !== null && lookup.trailingGapMs > staleThresholdMs) {
     reasons.push("telemetry_stale");
   }
 
@@ -83,7 +89,7 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
     reasons.push("gps_no_3d_fix");
   }
 
-  reasons.push(...collectGpsWarnReasons(telemetry));
+  reasons.push(...collectGpsWarnReasons(telemetry, raycast));
 
   const gimbal = resolveGimbalAttitude(telemetry, settings.camera);
   if (!gimbal) {
@@ -130,11 +136,16 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
   const depression = depressionAngleDeg(directionEnu);
   estimate.depressionAngleDeg = depression;
 
-  if (depression < DEFAULT_MIN_DEPRESSION_DEG) {
+  const minDownAngleDeg = raycast.minDownAngleDeg;
+  if (depression < minDownAngleDeg) {
     reasons.push("camera_above_horizon");
   }
 
-  const intersection = await intersectRayWithTerrain(originEnu, directionEnu, terrain);
+  const intersection = await intersectRayWithTerrain(originEnu, directionEnu, terrain, {
+    stepM: raycast.stepM,
+    maxRangeM: raycast.maxRangeM,
+    refineIterations: raycast.refineIterations
+  });
   if (!intersection.ok) {
     reasons.push(intersection.reason);
     estimate.reasons = reasons;

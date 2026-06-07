@@ -36,6 +36,23 @@ export interface CameraConfig {
 
 export type AltitudeMode = "amsl" | "relative";
 
+export interface RaycastConfig {
+  /** Maximum ray march distance before giving up (meters). */
+  maxRangeM: number;
+  /** Coarse march step along the ray (meters). */
+  stepM: number;
+  /** Minimum depression angle below horizontal required for a valid estimate (degrees). */
+  minDownAngleDeg: number;
+  /** Binary refinement iterations after a coarse terrain crossing. */
+  refineIterations: number;
+  /** Warn when interpolated telemetry is older than this (milliseconds). */
+  staleTelemetryWarnMs: number;
+  /** GPS EPH above this triggers `gps_low_accuracy` (meters). */
+  gpsLowAccuracyEphM: number;
+  /** Fewer satellites than this triggers `gps_few_satellites`. */
+  gpsFewSatellitesWarn: number;
+}
+
 export interface TargetEstimationSettings {
   /** Milliseconds subtracted from estimate tick time for delayed video. */
   videoLatencyMs: number;
@@ -43,6 +60,7 @@ export interface TargetEstimationSettings {
   /** Added to ray-origin altitude to align with terrain vertical datum. */
   altitudeOffsetM: number;
   camera: CameraConfig;
+  raycast: RaycastConfig;
 }
 
 export interface TerrainMetadata {
@@ -135,11 +153,22 @@ export const DEFAULT_CAMERA_CONFIG: CameraConfig = {
   allowBodyFixedWhenGimbalMissing: false
 };
 
+export const DEFAULT_RAYCAST_CONFIG: RaycastConfig = {
+  maxRangeM: 20_000,
+  stepM: 5,
+  minDownAngleDeg: 5,
+  refineIterations: 14,
+  staleTelemetryWarnMs: 500,
+  gpsLowAccuracyEphM: 2.0,
+  gpsFewSatellitesWarn: 8
+};
+
 export const DEFAULT_TARGET_ESTIMATION_SETTINGS: TargetEstimationSettings = {
   videoLatencyMs: 200,
   altitudeMode: "amsl",
   altitudeOffsetM: 0,
-  camera: DEFAULT_CAMERA_CONFIG
+  camera: DEFAULT_CAMERA_CONFIG,
+  raycast: DEFAULT_RAYCAST_CONFIG
 };
 
 export function createEmptyTargetEstimate(estimatedAtMs: number): TargetEstimate {

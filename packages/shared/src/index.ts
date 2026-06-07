@@ -52,6 +52,7 @@ export type {
   TargetEstimate,
   TargetEstimateInvalidReason,
   TargetEstimateQuality,
+  RaycastConfig,
   TargetEstimationSettings,
   TerrainElevationSample,
   TerrainMetadata,
@@ -62,6 +63,7 @@ export type {
 export {
   createEmptyTargetEstimate,
   DEFAULT_CAMERA_CONFIG,
+  DEFAULT_RAYCAST_CONFIG,
   DEFAULT_TARGET_ESTIMATION_SETTINGS
 } from "./targetEstimation.js";
 
