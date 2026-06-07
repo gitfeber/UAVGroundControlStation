@@ -54,10 +54,13 @@ export type {
   TargetEstimateQuality,
   RaycastConfig,
   TargetEstimationSettings,
+  TerrainElevationLookup,
   TerrainElevationSample,
   TerrainMetadata,
   TerrainProvider,
+  TerrainRayLookup,
   TerrainRaySample,
+  TerrainSampleFailureReason,
   YawReferenceConvention
 } from "./targetEstimation.js";
 export {

@@ -1,11 +1,15 @@
 import type {
   EnuTuple,
-  TerrainElevationSample,
+  TerrainElevationLookup,
   TerrainMetadata,
   TerrainProvider,
-  TerrainRaySample
+  TerrainRayLookup,
+  TerrainSampleFailureReason
 } from "@uav-ground-control-station/shared";
-import type { AnchorTerrainProvider } from "@uav-ground-control-station/target-estimation";
+import type {
+  AnchorCapableTerrainProvider,
+  TerrainAnchorPrepareResult
+} from "@uav-ground-control-station/target-estimation";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -17,9 +21,10 @@ interface TerrainMetadataResponse {
   sourcePath: string | null;
 }
 
-interface TerrainElevationSampleResponse {
-  elevationM: number;
-  nodata: boolean;
+interface TerrainLookupResponse {
+  elevationM?: number;
+  sample?: TerrainRaySampleResponse;
+  failure?: TerrainSampleFailureReason;
 }
 
 interface TerrainRaySampleResponse {
@@ -40,7 +45,11 @@ async function defaultInvoke<T>(command: string, args?: Record<string, unknown>)
   return invoke<T>(command, args);
 }
 
-export class TauriDemTerrainProvider implements TerrainProvider, AnchorTerrainProvider {
+function toFailureReason(failure: string | undefined): TerrainSampleFailureReason {
+  return failure === "dem_nodata" ? "dem_nodata" : "dem_out_of_coverage";
+}
+
+export class TauriDemTerrainProvider implements TerrainProvider, AnchorCapableTerrainProvider {
   readonly metadata: TerrainMetadata;
   private anchorLat = 0;
   private anchorLon = 0;
@@ -77,41 +86,65 @@ export class TauriDemTerrainProvider implements TerrainProvider, AnchorTerrainPr
     );
   }
 
-  /** Cache anchor AMSL for synchronous terrainAmslAt during one estimate tick. */
-  async prepareEstimateAnchor(lat: number, lon: number): Promise<void> {
+  async prepareEstimateAnchor(lat: number, lon: number): Promise<TerrainAnchorPrepareResult> {
     this.anchorLat = lat;
     this.anchorLon = lon;
-    this.anchorAmslM = await this.invokeFn<number | null>("sample_terrain_amsl_at", {
+    const response = await this.invokeFn<TerrainLookupResponse>("sample_terrain_amsl_at", {
       anchorLat: lat,
       anchorLon: lon,
       lat,
       lon
     });
+
+    if (response.failure) {
+      this.anchorAmslM = null;
+      return { ok: false, reason: toFailureReason(response.failure) };
+    }
+
+    if (response.elevationM === undefined || response.elevationM === null) {
+      this.anchorAmslM = null;
+      return { ok: false, reason: "dem_out_of_coverage" };
+    }
+
+    this.anchorAmslM = response.elevationM;
+    return { ok: true, elevationAmslM: response.elevationM };
   }
 
-  terrainAmslAt(lat: number, lon: number): number {
+  getAnchorElevationAmsl(): number | null {
+    return this.anchorAmslM;
+  }
+
+  terrainAmslAt(lat: number, lon: number): number | null {
     if (this.anchorAmslM !== null && lat === this.anchorLat && lon === this.anchorLon) {
       return this.anchorAmslM;
     }
-    throw new Error("Call prepareEstimateAnchor() before terrainAmslAt() in desktop DEM mode");
+    return null;
   }
 
-  async getElevationAtEnu(eastM: number, northM: number): Promise<TerrainElevationSample | null> {
-    const sample = await this.invokeFn<TerrainElevationSampleResponse | null>("get_elevation_at_enu", {
+  async getElevationAtEnu(eastM: number, northM: number): Promise<TerrainElevationLookup> {
+    const response = await this.invokeFn<TerrainLookupResponse>("get_elevation_at_enu", {
       anchorLat: this.anchorLat,
       anchorLon: this.anchorLon,
       eastM,
       northM
     });
-    if (!sample) return null;
-    return { elevationM: sample.elevationM, nodata: sample.nodata };
+
+    if (response.failure) {
+      return { ok: false, reason: toFailureReason(response.failure) };
+    }
+
+    if (response.elevationM === undefined || response.elevationM === null) {
+      return { ok: false, reason: "dem_out_of_coverage" };
+    }
+
+    return { ok: true, elevationM: response.elevationM };
   }
 
   async getElevationsAlongRay(
     originEnu: EnuTuple,
     directionEnu: EnuTuple,
     distancesM: readonly number[]
-  ): Promise<(TerrainRaySample | null)[]> {
+  ): Promise<TerrainRayLookup[]> {
     const origin: EnuPointResponse = {
       eastM: originEnu[0],
       northM: originEnu[1],
@@ -123,7 +156,7 @@ export class TauriDemTerrainProvider implements TerrainProvider, AnchorTerrainPr
       upM: directionEnu[2]
     };
 
-    const samples = await this.invokeFn<(TerrainRaySampleResponse | null)[]>("get_elevations_along_ray", {
+    const samples = await this.invokeFn<TerrainLookupResponse[]>("get_elevations_along_ray", {
       anchorLat: this.anchorLat,
       anchorLon: this.anchorLon,
       origin,
@@ -131,16 +164,20 @@ export class TauriDemTerrainProvider implements TerrainProvider, AnchorTerrainPr
       distancesM: [...distancesM]
     });
 
-    return samples.map((sample) =>
-      sample
-        ? {
-            distanceM: sample.distanceM,
-            enu: sample.enu,
-            elevationM: sample.elevationM,
-            nodata: sample.nodata
-          }
-        : null
-    );
+    return samples.map((entry) => {
+      if (entry.failure) {
+        return { ok: false, reason: toFailureReason(entry.failure) };
+      }
+      if (!entry.sample) {
+        return { ok: false, reason: "dem_out_of_coverage" };
+      }
+      return {
+        ok: true,
+        distanceM: entry.sample.distanceM,
+        enu: entry.sample.enu,
+        elevationM: entry.sample.elevationM
+      };
+    });
   }
 }
 

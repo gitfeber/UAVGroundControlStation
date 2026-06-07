@@ -1,9 +1,9 @@
 import type {
   EnuTuple,
-  TerrainElevationSample,
+  TerrainElevationLookup,
   TerrainMetadata,
   TerrainProvider,
-  TerrainRaySample
+  TerrainRayLookup
 } from "@uav-ground-control-station/shared";
 
 export interface SlopedPlaneTerrainProviderOptions {
@@ -13,7 +13,7 @@ export interface SlopedPlaneTerrainProviderOptions {
   slopeEast?: number;
   /** ENU surface rise per meter north. */
   slopeNorth?: number;
-  /** Optional absolute ENU coverage radius; outside returns null. */
+  /** Optional absolute ENU coverage radius; outside returns out-of-coverage. */
   coverageRadiusM?: number;
   verticalDatum?: string;
   horizontalCrs?: string;
@@ -54,16 +54,18 @@ export class SlopedPlaneTerrainProvider implements TerrainProvider {
     return Math.hypot(eastM, northM) <= this.coverageRadiusM;
   }
 
-  async getElevationAtEnu(eastM: number, northM: number): Promise<TerrainElevationSample | null> {
-    if (!this.isInCoverage(eastM, northM)) return null;
-    return { elevationM: this.surfaceEnuAt(eastM, northM), nodata: false };
+  async getElevationAtEnu(eastM: number, northM: number): Promise<TerrainElevationLookup> {
+    if (!this.isInCoverage(eastM, northM)) {
+      return { ok: false, reason: "dem_out_of_coverage" };
+    }
+    return { ok: true, elevationM: this.surfaceEnuAt(eastM, northM) };
   }
 
   async getElevationsAlongRay(
     originEnu: EnuTuple,
     directionEnu: EnuTuple,
     distancesM: readonly number[]
-  ): Promise<(TerrainRaySample | null)[]> {
+  ): Promise<TerrainRayLookup[]> {
     return Promise.all(
       distancesM.map(async (distanceM) => {
         const enu = [
@@ -72,12 +74,14 @@ export class SlopedPlaneTerrainProvider implements TerrainProvider {
           originEnu[2] + directionEnu[2] * distanceM
         ] as EnuTuple;
         const elevation = await this.getElevationAtEnu(enu[0], enu[1]);
-        if (!elevation) return null;
+        if (!elevation.ok) {
+          return { ok: false, reason: elevation.reason };
+        }
         return {
+          ok: true,
           distanceM,
           enu,
-          elevationM: elevation.elevationM,
-          nodata: elevation.nodata
+          elevationM: elevation.elevationM
         };
       })
     );

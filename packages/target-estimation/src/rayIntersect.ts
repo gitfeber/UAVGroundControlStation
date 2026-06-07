@@ -1,4 +1,4 @@
-import type { EnuTuple, TerrainProvider } from "@uav-ground-control-station/shared";
+import type { EnuTuple, TerrainElevationLookup, TerrainProvider, TerrainRayLookup } from "@uav-ground-control-station/shared";
 
 export interface RayIntersectOptions {
   stepM?: number;
@@ -32,17 +32,25 @@ function rayPoint(originEnu: EnuTuple, directionEnu: EnuTuple, distanceM: number
   ];
 }
 
+function elevationLookupToHeight(
+  lookup: TerrainElevationLookup,
+  rayUpM: number
+): number | RayIntersectFailureReason {
+  if (!lookup.ok) {
+    return lookup.reason;
+  }
+  return rayUpM - lookup.elevationM;
+}
+
 async function heightAboveTerrainAtDistance(
   originEnu: EnuTuple,
   directionEnu: EnuTuple,
   distanceM: number,
   terrain: TerrainProvider
-): Promise<number | null | "out_of_coverage"> {
+): Promise<number | RayIntersectFailureReason> {
   const [east, north, up] = rayPoint(originEnu, directionEnu, distanceM);
-  const sample = await terrain.getElevationAtEnu(east, north);
-  if (sample === null) return "out_of_coverage";
-  if (sample.nodata) return null;
-  return up - sample.elevationM;
+  const lookup = await terrain.getElevationAtEnu(east, north);
+  return elevationLookupToHeight(lookup, up);
 }
 
 async function refineIntersection(
@@ -57,13 +65,10 @@ async function refineIntersection(
   let high = upperDistanceM;
 
   for (let index = 0; index < iterations; index += 1) {
-    const mid = (low + high) / 2;
+    const mid = midDistance(low, high);
     const height = await heightAboveTerrainAtDistance(originEnu, directionEnu, mid, terrain);
-    if (height === "out_of_coverage") {
-      return { ok: false, reason: "dem_out_of_coverage" };
-    }
-    if (height === null) {
-      return { ok: false, reason: "dem_nodata" };
+    if (typeof height === "string") {
+      return { ok: false, reason: height };
     }
     if (height > 0) {
       low = mid;
@@ -74,22 +79,30 @@ async function refineIntersection(
 
   const slantRangeM = high;
   const hitEnu = rayPoint(originEnu, directionEnu, slantRangeM);
-  const terrainSample = await terrain.getElevationAtEnu(hitEnu[0], hitEnu[1]);
-  if (terrainSample === null) {
-    return { ok: false, reason: "dem_out_of_coverage" };
-  }
-  if (terrainSample.nodata) {
-    return { ok: false, reason: "dem_nodata" };
+  const terrainLookup = await terrain.getElevationAtEnu(hitEnu[0], hitEnu[1]);
+  if (!terrainLookup.ok) {
+    return { ok: false, reason: terrainLookup.reason };
   }
 
   return {
     ok: true,
     hit: {
-      hitEnu: [hitEnu[0], hitEnu[1], terrainSample.elevationM],
+      hitEnu: [hitEnu[0], hitEnu[1], terrainLookup.elevationM],
       slantRangeM,
-      terrainElevationM: terrainSample.elevationM
+      terrainElevationM: terrainLookup.elevationM
     }
   };
+}
+
+function midDistance(low: number, high: number): number {
+  return (low + high) / 2;
+}
+
+function rayLookupFailure(lookup: TerrainRayLookup | undefined): RayIntersectFailureReason {
+  if (lookup && !lookup.ok) {
+    return lookup.reason;
+  }
+  return "dem_out_of_coverage";
 }
 
 /**
@@ -111,11 +124,8 @@ export async function intersectRayWithTerrain(
   }
 
   const originHeight = await heightAboveTerrainAtDistance(originEnu, directionEnu, 0, terrain);
-  if (originHeight === "out_of_coverage") {
-    return { ok: false, reason: "dem_out_of_coverage" };
-  }
-  if (originHeight === null) {
-    return { ok: false, reason: "dem_nodata" };
+  if (typeof originHeight === "string") {
+    return { ok: false, reason: originHeight };
   }
   if (originHeight <= 0) {
     return { ok: false, reason: "no_ray_intersection" };
@@ -136,11 +146,8 @@ export async function intersectRayWithTerrain(
     for (let index = 0; index < batchDistances.length; index += 1) {
       const distanceM = batchDistances[index]!;
       const sample = samples[index];
-      if (sample === null || sample === undefined) {
-        return { ok: false, reason: "dem_out_of_coverage" };
-      }
-      if (sample.nodata) {
-        return { ok: false, reason: "dem_nodata" };
+      if (!sample || !sample.ok) {
+        return { ok: false, reason: rayLookupFailure(sample) };
       }
 
       const rayUp = rayPoint(originEnu, directionEnu, distanceM)[2];

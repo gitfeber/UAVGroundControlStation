@@ -88,11 +88,23 @@ export type TargetEstimateInvalidReason =
   | "no_ray_intersection"
   | "target_estimation_live_only";
 
+export type TerrainSampleFailureReason = "dem_out_of_coverage" | "dem_nodata";
+
+export type TerrainElevationLookup =
+  | { ok: true; elevationM: number }
+  | { ok: false; reason: TerrainSampleFailureReason };
+
+export type TerrainRayLookup =
+  | { ok: true; distanceM: number; enu: EnuTuple; elevationM: number }
+  | { ok: false; reason: TerrainSampleFailureReason };
+
+/** @deprecated Legacy shape kept for sample-log compatibility. */
 export interface TerrainElevationSample {
   elevationM: number;
   nodata: boolean;
 }
 
+/** @deprecated Legacy shape kept for sample-log compatibility. */
 export interface TerrainRaySample extends TerrainElevationSample {
   /** Distance along the ray from the camera origin (meters). */
   distanceM: number;
@@ -103,16 +115,13 @@ export interface TerrainRaySample extends TerrainElevationSample {
 export interface TerrainProvider {
   readonly metadata: TerrainMetadata;
   /** Single-point elevation lookup in ENU meters relative to the anchor. */
-  getElevationAtEnu(eastM: number, northM: number): Promise<TerrainElevationSample | null>;
-  /**
-   * Batched elevation samples along a ray. Returns null entries when a sample
-   * cannot be resolved (out of coverage, nodata, etc.).
-   */
+  getElevationAtEnu(eastM: number, northM: number): Promise<TerrainElevationLookup>;
+  /** Batched elevation samples along a ray with explicit failure reasons. */
   getElevationsAlongRay(
     originEnu: EnuTuple,
     directionEnu: EnuTuple,
     distancesM: readonly number[]
-  ): Promise<(TerrainRaySample | null)[]>;
+  ): Promise<TerrainRayLookup[]>;
 }
 
 export interface TargetEstimate {

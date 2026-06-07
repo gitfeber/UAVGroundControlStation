@@ -1,9 +1,9 @@
 import type {
   EnuTuple,
-  TerrainElevationSample,
+  TerrainElevationLookup,
   TerrainMetadata,
   TerrainProvider,
-  TerrainRaySample
+  TerrainRayLookup
 } from "@uav-ground-control-station/shared";
 
 /**
@@ -18,15 +18,15 @@ export class MissingDemTerrainProvider implements TerrainProvider {
     resolutionM: 0
   };
 
-  async getElevationAtEnu(_eastM: number, _northM: number): Promise<TerrainElevationSample | null> {
-    return null;
+  async getElevationAtEnu(_eastM: number, _northM: number): Promise<TerrainElevationLookup> {
+    return { ok: false, reason: "dem_out_of_coverage" };
   }
 
   async getElevationsAlongRay(
     _originEnu: EnuTuple,
     _directionEnu: EnuTuple,
     distancesM: readonly number[]
-  ): Promise<(TerrainRaySample | null)[]> {
-    return distancesM.map(() => null);
+  ): Promise<TerrainRayLookup[]> {
+    return distancesM.map(() => ({ ok: false, reason: "dem_out_of_coverage" }));
   }
 }

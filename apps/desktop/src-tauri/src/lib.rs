@@ -438,13 +438,9 @@ fn sample_terrain_amsl_at(
     lat: f64,
     lon: f64,
     state: State<DesktopState>,
-) -> Result<Option<f64>, String> {
+) -> Result<dem::TerrainLookupResponse, String> {
     let mut dem = state.dem.lock().map_err(lock_error)?;
-    match dem.terrain_amsl_at(anchor_lat, anchor_lon, lat, lon) {
-        Ok(value) => Ok(Some(value)),
-        Err(dem::DemError::OutOfCoverage) | Err(dem::DemError::NoData) => Ok(None),
-        Err(error) => Err(error.to_string()),
-    }
+    Ok(dem.terrain_amsl_lookup(anchor_lat, anchor_lon, lat, lon))
 }
 
 #[tauri::command]
@@ -454,13 +450,9 @@ fn get_elevation_at_enu(
     east_m: f64,
     north_m: f64,
     state: State<DesktopState>,
-) -> Result<Option<dem::TerrainElevationSampleResponse>, String> {
+) -> Result<dem::TerrainLookupResponse, String> {
     let mut dem = state.dem.lock().map_err(lock_error)?;
-    match dem.get_elevation_at_enu(anchor_lat, anchor_lon, east_m, north_m) {
-        Ok(sample) => Ok(Some(sample)),
-        Err(dem::DemError::OutOfCoverage) | Err(dem::DemError::NoData) => Ok(None),
-        Err(error) => Err(error.to_string()),
-    }
+    Ok(dem.elevation_at_enu_lookup(anchor_lat, anchor_lon, east_m, north_m))
 }
 
 #[tauri::command]
@@ -471,7 +463,7 @@ fn get_elevations_along_ray(
     direction: dem::EnuPoint,
     distances_m: Vec<f64>,
     state: State<DesktopState>,
-) -> Result<Vec<Option<dem::TerrainRaySampleResponse>>, String> {
+) -> Result<Vec<dem::TerrainLookupResponse>, String> {
     let mut dem = state.dem.lock().map_err(lock_error)?;
     dem.get_elevations_along_ray(anchor_lat, anchor_lon, origin, direction, distances_m)
         .map_err(|error| error.to_string())

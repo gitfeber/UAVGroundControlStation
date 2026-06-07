@@ -1,8 +1,33 @@
-import type { EnuTuple } from "@uav-ground-control-station/shared";
+import type { EnuTuple, TerrainElevationLookup, TerrainProvider, TerrainRayLookup } from "@uav-ground-control-station/shared";
 import { describe, expect, it } from "vitest";
 import { FlatTerrainProvider } from "./flatTerrain.js";
 import { intersectRayWithTerrain } from "./rayIntersect.js";
 import { SlopedPlaneTerrainProvider } from "./slopedTerrain.js";
+
+class FailureTerrainProvider implements TerrainProvider {
+  readonly metadata = {
+    verticalDatum: "test",
+    horizontalCrs: "test",
+    resolutionM: 1
+  };
+
+  constructor(
+    private readonly pointReason: "dem_nodata" | "dem_out_of_coverage",
+    private readonly rayReason: "dem_nodata" | "dem_out_of_coverage"
+  ) {}
+
+  async getElevationAtEnu(): Promise<TerrainElevationLookup> {
+    return { ok: false, reason: this.pointReason };
+  }
+
+  async getElevationsAlongRay(
+    _originEnu: EnuTuple,
+    _directionEnu: EnuTuple,
+    distancesM: readonly number[]
+  ): Promise<TerrainRayLookup[]> {
+    return distancesM.map(() => ({ ok: false, reason: this.rayReason }));
+  }
+}
 
 describe("intersectRayWithTerrain", () => {
   it("matches flat-plane nadir hit via terrain marching", async () => {
@@ -47,6 +72,34 @@ describe("intersectRayWithTerrain", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.reason).toBe("no_ray_intersection");
+  });
+
+  it("returns dem_nodata when the terrain provider reports nodata", async () => {
+    const terrain = new FailureTerrainProvider("dem_nodata", "dem_nodata");
+    const origin: EnuTuple = [0, 0, 100];
+    const direction: EnuTuple = [0, 0, -1];
+
+    const result = await intersectRayWithTerrain(origin, direction, terrain);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe("dem_nodata");
+  });
+
+  it("returns dem_out_of_coverage when batched ray samples leave coverage", async () => {
+    const flat = new FlatTerrainProvider({ elevationAmslM: 400 });
+    const failingTerrain: TerrainProvider = {
+      metadata: flat.metadata,
+      getElevationAtEnu: (eastM, northM) => flat.getElevationAtEnu(eastM, northM),
+      getElevationsAlongRay: (_originEnu, _directionEnu, distancesM) =>
+        Promise.resolve(distancesM.map(() => ({ ok: false, reason: "dem_out_of_coverage" as const })))
+    };
+    const origin: EnuTuple = [0, 0, 100];
+    const direction: EnuTuple = [0, 0, -1];
+
+    const result = await intersectRayWithTerrain(origin, direction, failingTerrain, { stepM: 5, maxRangeM: 20 });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe("dem_out_of_coverage");
   });
 
   it("returns dem_out_of_coverage when the ray leaves terrain bounds", async () => {

@@ -1,9 +1,9 @@
 import type {
   EnuTuple,
-  TerrainElevationSample,
+  TerrainElevationLookup,
   TerrainMetadata,
   TerrainProvider,
-  TerrainRaySample
+  TerrainRayLookup
 } from "@uav-ground-control-station/shared";
 
 export interface FlatTerrainProviderOptions {
@@ -34,15 +34,15 @@ export class FlatTerrainProvider implements TerrainProvider {
     return this.elevationAmslM;
   }
 
-  async getElevationAtEnu(_eastM: number, _northM: number): Promise<TerrainElevationSample> {
-    return { elevationM: 0, nodata: false };
+  async getElevationAtEnu(_eastM: number, _northM: number): Promise<TerrainElevationLookup> {
+    return { ok: true, elevationM: 0 };
   }
 
   async getElevationsAlongRay(
     originEnu: EnuTuple,
     directionEnu: EnuTuple,
     distancesM: readonly number[]
-  ): Promise<(TerrainRaySample | null)[]> {
+  ): Promise<TerrainRayLookup[]> {
     return distancesM.map((distanceM) => {
       const enu: EnuTuple = [
         originEnu[0] + directionEnu[0] * distanceM,
@@ -50,10 +50,10 @@ export class FlatTerrainProvider implements TerrainProvider {
         originEnu[2] + directionEnu[2] * distanceM
       ];
       return {
+        ok: true,
         distanceM,
         enu,
-        elevationM: 0,
-        nodata: false
+        elevationM: 0
       };
     });
   }

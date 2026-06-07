@@ -47,6 +47,17 @@ pub struct EnuPoint {
     pub up_m: f64,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerrainLookupResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub elevation_m: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sample: Option<TerrainRaySampleResponse>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure: Option<String>,
+}
+
 type GeoTiffReader = GeoTiff;
 
 pub struct DemService {
@@ -173,6 +184,48 @@ impl DemService {
         })
     }
 
+    pub fn terrain_amsl_lookup(
+        &mut self,
+        anchor_lat: f64,
+        anchor_lon: f64,
+        lat: f64,
+        lon: f64,
+    ) -> TerrainLookupResponse {
+        match self.terrain_amsl_at(anchor_lat, anchor_lon, lat, lon) {
+            Ok(value) => TerrainLookupResponse {
+                elevation_m: Some(value),
+                sample: None,
+                failure: None,
+            },
+            Err(error) => TerrainLookupResponse {
+                elevation_m: None,
+                sample: None,
+                failure: dem_failure_reason(&error),
+            },
+        }
+    }
+
+    pub fn elevation_at_enu_lookup(
+        &mut self,
+        anchor_lat: f64,
+        anchor_lon: f64,
+        east_m: f64,
+        north_m: f64,
+    ) -> TerrainLookupResponse {
+        match self.get_elevation_at_enu(anchor_lat, anchor_lon, east_m, north_m) {
+            Ok(sample) => TerrainLookupResponse {
+                elevation_m: Some(sample.elevation_m),
+                sample: None,
+                failure: None,
+            },
+            Err(error) => TerrainLookupResponse {
+                elevation_m: None,
+                sample: None,
+                failure: dem_failure_reason(&error),
+            },
+        }
+    }
+
     pub fn get_elevations_along_ray(
         &mut self,
         anchor_lat: f64,
@@ -180,7 +233,7 @@ impl DemService {
         origin: EnuPoint,
         direction: EnuPoint,
         distances_m: Vec<f64>,
-    ) -> Result<Vec<Option<TerrainRaySampleResponse>>, DemError> {
+    ) -> Result<Vec<TerrainLookupResponse>, DemError> {
         if !self.metadata.loaded {
             return Err(DemError::NotLoaded);
         }
@@ -202,14 +255,25 @@ impl DemService {
             let north_m = origin.north_m + dir.north_m * distance_m;
             let up_m = origin.up_m + dir.up_m * distance_m;
             match self.sample_enu(anchor_lat, anchor_lon, east_m, north_m) {
-                Ok(sample) => samples.push(Some(TerrainRaySampleResponse {
-                    distance_m,
-                    enu: [east_m, north_m, up_m],
-                    elevation_m: sample.elevation_enu,
-                    nodata: false,
-                })),
-                Err(DemError::OutOfCoverage) | Err(DemError::NoData) => samples.push(None),
-                Err(error) => return Err(error),
+                Ok(sample) => samples.push(TerrainLookupResponse {
+                    elevation_m: None,
+                    sample: Some(TerrainRaySampleResponse {
+                        distance_m,
+                        enu: [east_m, north_m, up_m],
+                        elevation_m: sample.elevation_enu,
+                        nodata: false,
+                    }),
+                    failure: None,
+                }),
+                Err(error) => {
+                    let failure = dem_failure_reason(&error)
+                        .ok_or(error)?;
+                    samples.push(TerrainLookupResponse {
+                        elevation_m: None,
+                        sample: None,
+                        failure: Some(failure),
+                    });
+                }
             }
         }
 
@@ -495,6 +559,14 @@ fn sample_geotiff_geographic(geo_tiff: &GeoTiffReader, lon: f64, lat: f64) -> Op
 
 fn sample_geotiff_projected(geo_tiff: &GeoTiffReader, easting: f64, northing: f64) -> Option<f32> {
     geo_tiff.get_value_at::<f32>(&Coord { x: easting, y: northing }, 0)
+}
+
+fn dem_failure_reason(error: &DemError) -> Option<String> {
+    match error {
+        DemError::OutOfCoverage => Some("dem_out_of_coverage".to_string()),
+        DemError::NoData => Some("dem_nodata".to_string()),
+        _ => None,
+    }
 }
 
 fn estimate_resolution_m(geo_tiff: &GeoTiffReader, extent: &Rect) -> f64 {
