@@ -221,4 +221,6 @@ docs/adr/           architecture decisions
 
 ## License
 
-No public license is provided. All rights reserved unless stated otherwise.
+Copyright © 2026 F. Eber
+
+Licensed under the [GNU General Public License v3.0](LICENSE) (GPL-3.0-only). You may use, modify, and redistribute this software under those terms. If you distribute a modified version, you must release the corresponding source under the same license. See [LICENSE](./LICENSE) for the full text.

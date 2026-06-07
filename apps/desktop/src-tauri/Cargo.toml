@@ -2,7 +2,8 @@
 name = "uav-ground-control-station"
 version = "0.2.1"
 description = "Native desktop shell for UAV Ground Control Station"
-authors = []
+authors = ["F. Eber"]
+license = "GPL-3.0-only"
 edition = "2021"
 
 [lib]
