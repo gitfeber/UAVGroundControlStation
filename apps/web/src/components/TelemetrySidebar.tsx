@@ -4,7 +4,9 @@ import type { AlertItem } from "../lib/alerts";
 import { elapsedTime, formatInteger, formatNumber, percentageColor } from "../lib/format";
 import { sensorHealthSummary } from "../lib/sensorHealth";
 import { defaultSidebarOrder, loadSidebarOrder, saveSidebarOrder, type SidebarCardId } from "../lib/sidebarCardOrder";
+import type { PreflightHealth } from "../lib/preflight";
 import { Badge, Metric, Panel } from "./Panel";
+import { PreflightHealthCard } from "./PreflightHealthCard";
 import type { SidebarDragHandlers } from "./SidebarSortableList";
 import { SidebarSortableList } from "./SidebarSortableList";
 import { TelemetryInstruments } from "./TelemetryInstruments";
@@ -17,9 +19,10 @@ interface TelemetrySidebarProps {
   telemetry: TelemetryState;
   distanceFromHome: number | null;
   alerts: AlertItem[];
+  preflight: PreflightHealth;
 }
 
-export function TelemetrySidebar({ telemetry, distanceFromHome, alerts }: TelemetrySidebarProps) {
+export function TelemetrySidebar({ telemetry, distanceFromHome, alerts, preflight }: TelemetrySidebarProps) {
   const [view, setView] = useState<SidebarView>(() => readSidebarView());
   const [cardOrder, setCardOrder] = useState<SidebarCardId[]>(() => loadSidebarOrder());
   const batteryPercent = telemetry.battery.remainingPercent;
@@ -50,6 +53,8 @@ export function TelemetrySidebar({ telemetry, distanceFromHome, alerts }: Teleme
           <SidebarViewToggle view={view} onChange={setView} />
         </div>
       </div>
+
+      <PreflightHealthCard health={preflight} />
 
       <Panel title="Alerts">
         {alerts.length === 0 ? (
