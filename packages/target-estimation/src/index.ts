@@ -7,8 +7,10 @@ export { SlopedPlaneTerrainProvider, type SlopedPlaneTerrainProviderOptions } fr
 export { terrainAmslAt, type AnchorTerrainProvider } from "./terrainUtils.js";
 export {
   aggregateTargetQuality,
-  MIN_DEPRESSION_DEG,
-  STALE_TELEMETRY_WARN_MS
+  DEFAULT_GPS_FEW_SATELLITES_WARN,
+  DEFAULT_GPS_LOW_ACCURACY_EPH_M,
+  DEFAULT_MIN_DEPRESSION_DEG,
+  DEFAULT_STALE_TELEMETRY_WARN_MS
 } from "./quality.js";
 export { depressionAngleDeg, opticalAxisEnu, resolveGimbalAttitude, type ResolvedGimbalAttitude } from "./gimbal.js";
 export { enuDeltaToGeodetic, metersPerDegreeLat, metersPerDegreeLon, normalizeVector } from "./geo.js";

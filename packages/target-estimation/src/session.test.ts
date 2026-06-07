@@ -188,7 +188,7 @@ describe("TargetEstimationSession", () => {
 
     const estimate = await session.estimate({ estimatedAtMs: 3000, atPcTimeMs: 3000 });
     expect(estimate.valid).toBe(false);
-    expect(estimate.reasons).toContain("horizon_too_shallow");
+    expect(estimate.reasons).toContain("camera_above_horizon");
   });
 
   it("estimates against a sloped synthetic terrain plane", async () => {

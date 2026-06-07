@@ -9,7 +9,13 @@ import {
 } from "@uav-ground-control-station/shared";
 import { depressionAngleDeg, opticalAxisEnu, resolveGimbalAttitude } from "./gimbal.js";
 import { enuDeltaToGeodetic, normalizeVector } from "./geo.js";
-import { aggregateTargetQuality, MIN_DEPRESSION_DEG, STALE_TELEMETRY_WARN_MS } from "./quality.js";
+import {
+  aggregateTargetQuality,
+  DEFAULT_GPS_FEW_SATELLITES_WARN,
+  DEFAULT_GPS_LOW_ACCURACY_EPH_M,
+  DEFAULT_MIN_DEPRESSION_DEG,
+  DEFAULT_STALE_TELEMETRY_WARN_MS
+} from "./quality.js";
 import { intersectRayWithTerrain } from "./rayIntersect.js";
 import type { TelemetryLookupResult } from "./telemetryBuffer.js";
 import { terrainAmslAt } from "./terrainUtils.js";
@@ -30,6 +36,19 @@ function isDemLoaded(terrain: TerrainProvider): boolean {
   return true;
 }
 
+function collectGpsWarnReasons(telemetry: TelemetryState): TargetEstimateInvalidReason[] {
+  const reasons: TargetEstimateInvalidReason[] = [];
+  const { eph, satellites } = telemetry.gps;
+
+  if (eph !== null && eph > DEFAULT_GPS_LOW_ACCURACY_EPH_M) {
+    reasons.push("gps_low_accuracy");
+  }
+  if (satellites !== null && satellites < DEFAULT_GPS_FEW_SATELLITES_WARN) {
+    reasons.push("gps_few_satellites");
+  }
+  return reasons;
+}
+
 export async function estimateTargetFromTelemetry(input: EstimateTargetInput): Promise<TargetEstimate> {
   const { telemetry, lookup, terrain, settings, estimatedAtMs, telemetrySampledAtMs } = input;
   const estimate = createEmptyTargetEstimate(estimatedAtMs);
@@ -37,21 +56,20 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
 
   const reasons: TargetEstimateInvalidReason[] = [];
 
-  if (!isDemLoaded(terrain)) {
-    estimate.reasons = ["dem_not_loaded"];
-    estimate.quality = "bad";
-    estimate.valid = false;
-    return estimate;
+  if (lookup.trailingGapMs !== null && lookup.trailingGapMs > DEFAULT_STALE_TELEMETRY_WARN_MS) {
+    reasons.push("telemetry_stale");
   }
 
-  if (lookup.trailingGapMs !== null && lookup.trailingGapMs > STALE_TELEMETRY_WARN_MS) {
-    reasons.push("telemetry_stale");
+  if (!isDemLoaded(terrain)) {
+    reasons.push("dem_not_loaded");
+    estimate.reasons = reasons;
+    return finalizeEstimate(estimate, reasons, null);
   }
 
   const lat = telemetry.position.lat;
   const lon = telemetry.position.lon;
   if (lat === null || lon === null) {
-    reasons.push("missing_position");
+    reasons.push("telemetry_incomplete");
     estimate.reasons = reasons;
     return finalizeEstimate(estimate, reasons, null);
   }
@@ -62,8 +80,10 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
   estimate.anchorLon = lon;
 
   if ((telemetry.gps.fixType ?? 0) < 3) {
-    reasons.push("gps_not_3d");
+    reasons.push("gps_no_3d_fix");
   }
+
+  reasons.push(...collectGpsWarnReasons(telemetry));
 
   const gimbal = resolveGimbalAttitude(telemetry, settings.camera);
   if (!gimbal) {
@@ -74,6 +94,13 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
 
   estimate.gimbalSource = gimbal.source;
 
+  if (gimbal.source === "mavlink265") {
+    reasons.push("gimbal_mount_orientation");
+  }
+  if (gimbal.source === "bodyFixed") {
+    reasons.push("gimbal_body_fixed_fallback");
+  }
+
   let rayOriginAltMsl: number | null = null;
   if (settings.altitudeMode === "amsl") {
     if (telemetry.position.altMsl !== null) {
@@ -81,7 +108,7 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
     } else if (telemetry.position.relativeAlt !== null) {
       const terrainAtUav = terrainAmslAt(terrain, lat, lon);
       rayOriginAltMsl = terrainAtUav + telemetry.position.relativeAlt + settings.altitudeOffsetM;
-      reasons.push("altitude_fallback_relative");
+      reasons.push("using_relative_altitude_fallback");
     }
   } else if (telemetry.position.relativeAlt !== null) {
     const terrainAtUav = terrainAmslAt(terrain, lat, lon);
@@ -89,7 +116,7 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
   }
 
   if (rayOriginAltMsl === null) {
-    reasons.push("missing_altitude");
+    reasons.push("telemetry_incomplete");
     estimate.reasons = reasons;
     return finalizeEstimate(estimate, reasons, gimbal);
   }
@@ -103,8 +130,8 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
   const depression = depressionAngleDeg(directionEnu);
   estimate.depressionAngleDeg = depression;
 
-  if (depression < MIN_DEPRESSION_DEG) {
-    reasons.push("horizon_too_shallow");
+  if (depression < DEFAULT_MIN_DEPRESSION_DEG) {
+    reasons.push("camera_above_horizon");
   }
 
   const intersection = await intersectRayWithTerrain(originEnu, directionEnu, terrain);
@@ -130,17 +157,13 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
 function finalizeEstimate(
   estimate: TargetEstimate,
   reasons: TargetEstimateInvalidReason[],
-  gimbal: ReturnType<typeof resolveGimbalAttitude>
+  _gimbal: ReturnType<typeof resolveGimbalAttitude>
 ): TargetEstimate {
   const hasCoordinates = estimate.lat !== null && estimate.lon !== null;
   const { quality, valid } = aggregateTargetQuality(reasons, hasCoordinates);
   estimate.quality = quality;
   estimate.valid = valid;
   estimate.reasons = [...new Set(reasons)];
-
-  if (gimbal?.source === "bodyFixed" && estimate.valid && estimate.quality === "good") {
-    estimate.quality = "warn";
-  }
 
   return estimate;
 }

@@ -52,16 +52,19 @@ export interface TerrainMetadata {
 export type TargetEstimateQuality = "good" | "warn" | "bad";
 
 export type TargetEstimateInvalidReason =
-  | "dem_not_loaded"
+  | "telemetry_incomplete"
   | "gimbal_unavailable"
+  | "dem_not_loaded"
   | "dem_out_of_coverage"
   | "dem_nodata"
-  | "gps_not_3d"
+  | "camera_above_horizon"
+  | "gps_no_3d_fix"
   | "telemetry_stale"
-  | "horizon_too_shallow"
-  | "altitude_fallback_relative"
-  | "missing_position"
-  | "missing_altitude"
+  | "using_relative_altitude_fallback"
+  | "gimbal_body_fixed_fallback"
+  | "gimbal_mount_orientation"
+  | "gps_low_accuracy"
+  | "gps_few_satellites"
   | "no_ray_intersection"
   | "target_estimation_live_only";
 

@@ -101,7 +101,7 @@ export class TargetEstimationSession {
     if (!lookup.state || lookup.sampledAtMs === null) {
       const empty = createEmptyTargetEstimate(estimatedAtMs);
       empty.telemetrySampledAtMs = null;
-      empty.reasons = ["telemetry_stale"];
+      empty.reasons = ["telemetry_incomplete"];
       empty.quality = "bad";
       empty.valid = false;
       return Promise.resolve(empty);
