@@ -188,6 +188,7 @@ struct MavlinkFrameParser {
 struct LoggerState {
     file_path: Option<PathBuf>,
     writer: Option<BufWriter<File>>,
+    session_start_ms: u64,
 }
 
 #[derive(Clone, Default)]
@@ -388,6 +389,7 @@ fn start_logging(state: State<DesktopState>, app: AppHandle) -> Result<LoggingSt
     let file_path = logs_dir.join(format!("flight-{}.jsonl", Local::now().format("%Y-%m-%d-%H-%M-%S")));
     let file = File::create(&file_path).map_err(|error| error.to_string())?;
     logging.file_path = Some(file_path);
+    logging.session_start_ms = now_ms();
     logging.writer = Some(BufWriter::new(file));
 
     Ok(logging_status_from_logger(&logging))
@@ -413,6 +415,7 @@ pub fn run() {
             logging: Arc::new(Mutex::new(LoggerState {
                 file_path: None,
                 writer: None,
+                session_start_ms: 0,
             })),
             diagnostics: Arc::new(Mutex::new(SerialDiagnostics::default())),
         })
@@ -1321,11 +1324,19 @@ fn emit_status_and_telemetry(app: &AppHandle, state: &DesktopState) -> Result<()
 
 fn write_log_if_active(worker_state: &WorkerState, telemetry: &TelemetryState) -> Result<(), String> {
     let mut logging = worker_state.logging.lock().map_err(lock_error)?;
+    let session_start_ms = logging.session_start_ms;
     if let Some(writer) = logging.writer.as_mut() {
+        // Replay-compatible JSONL schema v1 (ADR 0003): newly recorded logs
+        // replay without conversion. The replay parser still reads the legacy
+        // {time,type,data} shape for older logs.
+        let ts = now_ms();
         let entry = serde_json::json!({
-            "time": now_ms(),
+            "schemaVersion": 1,
+            "ts": ts,
+            "relativeMs": ts.saturating_sub(session_start_ms),
+            "source": "live",
             "type": "telemetry",
-            "data": telemetry
+            "state": telemetry
         });
         writeln!(writer, "{entry}").map_err(|error| error.to_string())?;
     }

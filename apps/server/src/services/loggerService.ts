@@ -1,13 +1,14 @@
 import { createWriteStream, existsSync, mkdirSync, type WriteStream } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { LoggingStatus, TelemetryState } from "@uav-ground-control-station/shared";
+import { REPLAY_LOG_SCHEMA_VERSION, type LoggingStatus, type TelemetryState } from "@uav-ground-control-station/shared";
 
 const logsDir = fileURLToPath(new URL("../../../../logs", import.meta.url));
 
 export class LoggerService {
   private stream: WriteStream | null = null;
   private filePath: string | null = null;
+  private sessionStartMs = 0;
 
   start(): LoggingStatus {
     if (this.stream) {
@@ -20,6 +21,7 @@ export class LoggerService {
 
     const filePath = join(logsDir, `flight-${timestampForFile()}.jsonl`);
     this.filePath = filePath;
+    this.sessionStartMs = Date.now();
     this.stream = createWriteStream(filePath, { flags: "a" });
     return this.status();
   }
@@ -41,10 +43,16 @@ export class LoggerService {
   writeTelemetry(data: TelemetryState): void {
     if (!this.stream) return;
 
+    // Replay-compatible JSONL schema v1 (ADR 0003): newly recorded logs replay
+    // without conversion. The replay parser still reads legacy {time,type,data}.
+    const ts = Date.now();
     const entry = {
-      time: Date.now(),
+      schemaVersion: REPLAY_LOG_SCHEMA_VERSION,
+      ts,
+      relativeMs: ts - this.sessionStartMs,
+      source: "live",
       type: "telemetry",
-      data: compactTelemetry(data)
+      state: compactTelemetry(data)
     };
 
     this.stream.write(`${JSON.stringify(entry)}\n`);
