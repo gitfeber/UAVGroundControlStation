@@ -46,6 +46,36 @@ _Avoid_: Artificial horizon (description only), HUD overlay, Drone overlay (reti
 Sidebar **Inst** view — compact SVG gauges (compass, battery, radio, tapes, GPS badge, attitude ball) from **TelemetryState** without new backend fields.
 _Avoid_: Widget panel, gauge mode
 
+### Source and playback
+
+**Source mode**:
+Which producer drives the dashboard right now — `live` (telemetry link), `replay` (recorded log), or `simulation` (synthetic). Exactly one is active at a time. Selected in the topbar; replay and simulation never open, write, or request serial.
+_Avoid_: Input mode, feed type
+
+**Active telemetry**:
+The single **TelemetryState** the dashboard renders, derived from the current source mode. Live, replay, and simulation each keep their own internal **TelemetryState**; only the active one is displayed.
+_Avoid_: Current telemetry (ambiguous with live)
+
+**Replay log**:
+A local recorded file (JSONL or JSON) of past telemetry, treated as untrusted input. Newly recorded logs use `REPLAY_LOG_SCHEMA_VERSION` 1; legacy `{time,type,data}` and plain **TelemetryState** lines are read best-effort.
+_Avoid_: Flight log (use only for the human-facing file label), recording
+
+**Replay event**:
+One normalized entry from a replay log — `telemetry`, `partialTelemetry`, `activity`, or `diagnostic`. The replay engine applies events in file order to reconstruct **active telemetry**.
+_Avoid_: Log line (that is the raw, pre-parse form)
+
+**Replay engine**:
+The pure, timer-free core (`advanceTo` / `stepOnce` / `seekTo`) that reconstructs state from **replay events**. A requestAnimationFrame driver feeds it virtual time. Simulation reuses the same engine over a pre-generated event list.
+_Avoid_: Player, scheduler (the rAF wrapper is the "driver")
+
+**Controlled track**:
+The map path supplied to `MapPanel` by the replay/simulation source (rebuilt deterministically on seek/restart). Distinct from live mode's internal self-appending track.
+_Avoid_: Replay path
+
+**Simulation scenario**:
+A named deterministic generator (`Nominal flight`, `Weak radio link`, `GPS degradation`, `Low battery approach`) that, given a seed, produces a bounded **replay event** list. No file, serial, network, or hardware access.
+_Avoid_: Demo data, test mode
+
 ## Flagged ambiguities
 
 | Ambiguous | Canonical | Notes |

@@ -9,7 +9,9 @@
     "build": "tsc -p tsconfig.json && vite build",
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "preview": "vite preview --host 0.0.0.0 --port 5173"
+    "preview": "vite preview --host 0.0.0.0 --port 5173",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@uav-ground-control-station/shared": "workspace:*",
@@ -27,6 +29,7 @@
     "@tailwindcss/postcss": "latest",
     "@types/geojson": "latest",
     "@types/react": "latest",
-    "@types/react-dom": "latest"
+    "@types/react-dom": "latest",
+    "vitest": "latest"
   }
 }

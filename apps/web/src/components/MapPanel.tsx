@@ -4,12 +4,19 @@ import type { TelemetryState } from "@uav-ground-control-station/shared";
 import type { Coordinate } from "../lib/geo";
 import { isValidLngLat, toMapLngLat } from "../lib/geo";
 import { resolveHeadingDeg } from "../lib/resolveHeadingDeg";
+import type { TrackPoint } from "../replay/reconstruct";
 import { HudOverlay } from "./HudOverlay";
 
 interface MapPanelProps {
   telemetry: TelemetryState;
   coordinate: Coordinate | null;
   home: Coordinate | null;
+  /**
+   * Replay/simulation controlled track. When `trackMode` is "controlled" the
+   * map renders exactly this array and never appends internally (ADR 0003 §5).
+   */
+  controlledTrack?: TrackPoint[];
+  trackMode?: "internal" | "controlled";
 }
 
 type TrackFeature = Feature<LineString, Record<string, never>>;
@@ -17,7 +24,7 @@ type PointCollection = FeatureCollection<Point, Record<string, never>>;
 
 const fallbackCenter: [number, number] = [10.4515, 51.1657];
 
-export function MapPanel({ telemetry, coordinate, home }: MapPanelProps) {
+export function MapPanel({ telemetry, coordinate, home, controlledTrack, trackMode = "internal" }: MapPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<import("maplibre-gl").Map | null>(null);
   const maplibreRef = useRef<typeof import("maplibre-gl") | null>(null);
@@ -25,8 +32,18 @@ export function MapPanel({ telemetry, coordinate, home }: MapPanelProps) {
   const [mapReady, setMapReady] = useState(false);
   const [track, setTrack] = useState<[number, number][]>([]);
 
+  const isControlled = trackMode === "controlled";
   const droneLngLat = useMemo(() => toMapLngLat(coordinate), [coordinate]);
   const homeLngLat = useMemo(() => toMapLngLat(home), [home]);
+
+  // In controlled mode the replay/sim controller owns the track; render exactly
+  // what it provides. In internal mode the live append-on-change track is used.
+  const displayTrack = useMemo<[number, number][]>(() => {
+    if (!isControlled) return track;
+    return (controlledTrack ?? [])
+      .map((point) => [point.lon, point.lat] as [number, number])
+      .filter((point) => isValidLngLat(point[0], point[1]));
+  }, [isControlled, controlledTrack, track]);
 
   const heading = resolveHeadingDeg(telemetry) ?? 0;
 
@@ -110,7 +127,7 @@ export function MapPanel({ telemetry, coordinate, home }: MapPanelProps) {
   }, []);
 
   useEffect(() => {
-    if (!droneLngLat) return;
+    if (isControlled || !droneLngLat) return; // controlled track is owned by the replay controller
 
     setTrack((current) => {
       const last = current[current.length - 1];
@@ -120,15 +137,15 @@ export function MapPanel({ telemetry, coordinate, home }: MapPanelProps) {
 
       return [...current, droneLngLat].slice(-5000);
     });
-  }, [droneLngLat]);
+  }, [droneLngLat, isControlled]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
 
     const source = map.getSource("track") as import("maplibre-gl").GeoJSONSource | undefined;
-    source?.setData(trackFeature(sanitizeTrack(track)));
-  }, [mapReady, track]);
+    source?.setData(trackFeature(sanitizeTrack(displayTrack)));
+  }, [mapReady, displayTrack]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -159,9 +176,11 @@ export function MapPanel({ telemetry, coordinate, home }: MapPanelProps) {
         <HudOverlay telemetry={telemetry} />
       </div>
 
-      <button className="btn-secondary absolute bottom-4 left-4" onClick={() => setTrack([])}>
-        Clear Track
-      </button>
+      {!isControlled && (
+        <button className="btn-secondary absolute bottom-4 left-4" onClick={() => setTrack([])}>
+          Clear Track
+        </button>
+      )}
     </main>
   );
 }
