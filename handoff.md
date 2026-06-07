@@ -1,86 +1,157 @@
-# Handoff — Preflight Health Check
+# Handoff: Ground Target Estimation (DEM Raycast)
 
-**Repo:** `gitfeber/UAVGroundControlStation` (branch `main`, clean at session start)
-**Date:** 2026-06-07
-**State:** Design fully grilled & resolved. Docs written. **No implementation code written yet.**
+**Project:** `uav-ground-control-station`  
+**Date:** 2026-06-08  
+**Status:** Design grill started — no implementation yet  
+**Handoff for:** Fresh agent implementing center-of-image ground target estimation
 
-## What this is
+---
 
-Add a read-only, operator-facing **Preflight health** panel: a derived readiness status (`READY`/`CAUTION`/`NOT_READY`/`UNKNOWN`) computed purely from existing **active telemetry**. Frontend-only, additive, read-only — no backend/serial/Rust/MAVLink/CRSF changes, no UAV commands.
+## Goal
 
-## Already-written artifacts (do NOT duplicate — read these first for rationale)
+Estimate WGS84 coordinates of ground target at **video image center** by:
 
-- **[docs/adr/0004-preflight-health-advisory.md](../../Documents/Github/UAVGroundControlStation/docs/adr/0004-preflight-health-advisory.md)** — the contract: advisory-only, NOT the FC pre-arm; all-source-mode; freshness gated to live. Repo path: `docs/adr/0004-preflight-health-advisory.md`.
-- **CONTEXT.md** (repo root) — canonical terms added this session: **Preflight health**, **Preflight check**, **Telemetry freshness** (distinct from reserved **Telemetry link** = serial connection), **Home reference** (UI first-fix, not FC home).
+1. Building camera optical-axis ray from UAV pose + gimbal + camera mount
+2. Intersecting ray with local DEM
+3. Returning lat/lon, terrain elevation, slant/ground range, quality
 
-## Key codebase facts (verified this session)
+Target accuracy: few meters to ~10 m. No object detection, no photogrammetry v1.
 
-- `TelemetryState` lives in `packages/shared/src/index.ts`. Fields: top-level `connected`, `lastPacketAt`, `packetCount`; nested `vehicle{armed,...}`, `position`, `gps{fixType,satellites,eph,...}`, `battery{remainingPercent,voltage,cellVoltageEstimate,...}`, `radio{rssi,linkQuality,...}`, `system{sensorsEnabled,sensorsHealth,statusText,...}`, `stats{...}`.
-- `apps/web/src/lib/alerts.ts` already hardcodes overlapping thresholds — **leave untouched** (decision: independent preflight thresholds, lower regression risk).
-- `home` is NOT in TelemetryState — it's `useState` in `apps/web/src/App.tsx:38`, seeded from first valid coordinate. Must be passed into the pure fn via opts.
-- **Staleness landmine:** live `lastPacketAt` = wall-clock; replay/sim `lastPacketAt` = virtual time from 0 (`apps/web/src/replay/simulation.ts:180`, `reconstruct.ts:34`). `Date.now() - lastPacketAt` is meaningless off-live → freshness must be gated to live mode.
-- Sidebar cards (`sidebarCardOrder.ts`) are sortable; the Alerts panel is a fixed `Panel` at top, outside the sortable set — mirror that for the new card.
-- `apps/web/src/lib/sensorHealth.ts` already has the `(enabled & ~health)` fault logic to reuse.
-- `apps/web/src/lib/geo.ts` has `validCoordinate` for the home check.
-- Build/verify locally: `& "$env:APPDATA\npm\pnpm.cmd"` (run typecheck + vitest in `apps/web`).
+Full spec: user message in session (15 sections, Steps A–H). Reference that message; do not duplicate here.
 
-## Full implementation spec
+---
 
-The complete spec (types, exact signature, all thresholds, the 7-check table with band rules, aggregation, summary priority, UI, test list, acceptance) is in the final assistant message of the originating conversation. Reproduced condensed below so this doc is self-sufficient.
+## Repo snapshot (what exists)
 
-### Files
-- New: `apps/web/src/lib/preflight.ts` (pure `evaluatePreflightHealth` + types — or put types in `packages/shared`), `apps/web/src/lib/preflightThresholds.ts`, `apps/web/src/lib/preflight.test.ts`, `apps/web/src/components/PreflightHealthCard.tsx`.
-- Edit: `apps/web/src/App.tsx` (useMemo + pass down), `apps/web/src/components/TelemetrySidebar.tsx` (render card fixed at top, above Alerts).
+| Area | State |
+|------|--------|
+| `TelemetryState` | `packages/shared/src/index.ts` — position, GPS, motion (roll/pitch/yaw), no gimbal, no timestamps per field |
+| MAVLink desktop parser | `apps/desktop/src-tauri/src/lib.rs` — HB, SYS_STATUS, GPS_RAW_INT, ATTITUDE, GLOBAL_POSITION_INT, VFR_HUD, etc. **No gimbal messages decoded** |
+| Supported MAVLink IDs | Includes 285? Check — list has 285? 241, 245 in list but gimbal IDs (285 GIMBAL_DEVICE_ATTITUDE_STATUS) **not** in `apply_frame` match |
+| Geo math | `apps/web/src/lib/geo.ts`, `apps/server/src/services/geo.ts` — haversine only, no ENU |
+| DEM / raycast | **None** |
+| Video | `apps/web/src/components/VideoPanel.tsx` — external MJPEG/HLS/WebRTC URL, no frame timestamps, no crosshair |
+| Tests | `apps/web/src/**/*.test.ts` — replay/preflight only |
+| ADR | `docs/adr/0001-dual-runtime-desktop-canonical.md` — desktop Tauri canonical for production; browser+Node dev/fallback |
+| Glossary | `CONTEXT.md` — no target-estimation terms yet |
 
-### Signature
-```ts
-evaluatePreflightHealth(
-  telemetry: TelemetryState | null | undefined,
-  now: number = Date.now(),
-  opts: { sourceMode?: 'live'|'replay'|'simulation'; home?: {lat:number;lon:number}|null; thresholds?: Partial<PreflightThresholds> } = {}
-): PreflightHealth
+**Version:** `0.2.1` (bump on functional change per project rules)
+
+---
+
+## Planned modules (from spec, not built)
+
+1. **Shared types** — `GimbalState`, `CameraConfig`, `TerrainProvider`, `TargetEstimate`, extended telemetry
+2. **Telemetry ring buffer** — 5–10 s, latency-aware lookup + interpolation
+3. **Target estimation core** — ray build + terrain intersect (testable, UI-independent)
+4. **DEM** — GeoTIFF via backend (Tauri Rust preferred); `TerrainProvider` abstraction
+5. **Coordinates** — WGS84 ↔ local ENU; vertical datum config + offset
+6. **UI** — target readout, config, map marker + LOS line, video crosshair
+7. **Logging/export** — JSON/CSV samples
+8. **Tests** — synthetic flat/sloped terrain, horizon reject, missing gimbal/DEM, latency buffer
+
+**Implementation order:** A (types) → B (buffer) → C (core + flat terrain) → D (raycast tests) → E (GeoTIFF) → F (UI) → G (logging) → H (gimbal MAVLink)
+
+---
+
+## Resolved decisions
+
+- **Runtime split (ADR 0005):** Option C — `packages/target-estimation` (math, buffer, tests, synthetic terrain) + `apps/desktop/src-tauri` (GeoTIFF, cache, `estimate_target` command). Real DEM desktop-only v1; browser uses synthetic terrain.
+- **Glossary:** Ground target, Target estimate, Terrain model, Gimbal attitude, Camera configuration in `CONTEXT.md`.
+- **Gimbal telemetry (Q2):** Option D — unknown/mixed stack. Decode priority `285 → 265 → body-fixed ATTITUDE`. Runtime frame-stats show which IDs arrive. `CameraConfig` convention flags (frame, pitch sign, yaw ref, calibration offsets). No gimbal + body-fixed not enabled → `valid: false`, `quality: bad`, `reason: gimbal_unavailable`.
+- **Video time base (Q3):** A + D-ready API. v1: 10 Hz tick, `atPcTimeMs = performance.now() - videoLatencyMs`, buffer lookup by `telemetry.sampledAtMs` (new field; not `lastPacketAt`). API accepts optional explicit `atPcTimeMs` later for frame metadata.
+- **Vertical datum (Q4):** A + D-lite. Default `altitudeMode: "amsl"`, `altitudeOffsetM: 0`. Ray origin `altMsl + offset`. Fallback to relative + terrain at UAV → `quality: warn`. No ellipsoid/geoid v1. DEM metadata exposes `verticalDatum`, `horizontalCrs`, `resolutionM`. UI calibration note required.
+- **ENU anchor (Q5):** A — per-estimate UAV position at latency-corrected time. `cameraOriginEnu = [0,0,rayOriginZ]`. DEM queries reproject via same anchor. Map LOS uses same estimate's UAV + hit. Tick jitter OK.
+- **DEM loading (Q6):** B + batched IPC. Rust sliding window cache (default 4 km × 4 km, recenter at 50% margin). `getElevationsAlongRay(...)` for batched elevation. TS `TauriDemTerrainProvider`. Out of bounds → `dem_out_of_coverage`; nodata → `dem_nodata`.
+- **Quality gates (Q7):** Adopt proposed table. Worst-wins aggregation. 3D GPS required for `valid: true`. Body-fixed gimbal when enabled → `warn`. Stale telemetry warn at 500 ms. Horizon min 5° below horizontal. Warn gates still compute/show coords when math allows.
+- **UI (Q8):** D — hybrid. VideoPanel: crosshair + compact strip (lat/lon, slant, quality pill). Sidebar sortable "Ground Target" panel: full readout + all config. Map: marker + LOS for valid/warn; hide on bad. Settings `localStorage` `uav-gcs.target.*`. Tauri file picker for DEM desktop.
+- **Orchestration (Q9):** B — `TargetEstimationSession` in `packages/target-estimation` owns buffer + estimation. Thin `useTargetEstimation` hook in web. Replay/sim → `target_estimation_live_only`.
+- **Logging/export (Q10):** A — in-memory ring 600 samples (~60 s). Slim telemetry slice per sample. Manual JSON/CSV export + clear. Optional Tauri `save_target_log`. No replay pollution; no continuous disk write.
+
+## Resolved decisions summary (10/10)
+
+| # | Topic | Decision |
+|---|-------|----------|
+| 1 | Runtime split | C — TS core + Rust DEM (ADR 0005) |
+| 2 | Gimbal | D — 285→265→body-fixed; runtime discovery |
+| 3 | Video time | A + D-ready API; 10 Hz; `sampledAtMs` |
+| 4 | Altitude | A + D-lite; amsl default + offset |
+| 5 | ENU anchor | Per-estimate UAV position |
+| 6 | DEM load | B + `getElevationsAlongRay` IPC; 4 km window |
+| 7 | Quality gates | Full table; 3D required; 500 ms stale |
+| 8 | UI | D — hybrid video + sidebar + map |
+| 9 | Orchestration | `TargetEstimationSession` + thin hook |
+| 10 | Logging/export | In-memory ring + manual JSON/CSV export |
+
+**Grill complete.** Ready for implementation Steps A–H per original spec.
+
+## Implementation checklist (Steps A–H)
+
+- [ ] **A** — Shared types: `GimbalState`, `CameraConfig`, `TerrainProvider`, `TargetEstimate`, extend `TelemetryState` with `sampledAtMs` + gimbal
+- [ ] **B** — Telemetry ring buffer + timestamp lookup/interpolation in `packages/target-estimation`
+- [ ] **C** — `TargetEstimationSession` + synthetic flat terrain
+- [ ] **D** — Raycasting + unit tests
+- [ ] **E** — Rust GeoTIFF window cache + `get_elevations_along_ray` + `TauriDemTerrainProvider`
+- [ ] **F** — UI: VideoPanel overlay, Ground Target sidebar, map marker/LOS
+- [ ] **G** — Sample log ring + JSON/CSV export (+ optional `save_target_log`)
+- [ ] **H** — MAVLink 285/265 decode + frame stats in Rust
+
+## Artifacts updated this session
+
+- `docs/adr/0005-target-estimation-ts-rust-split.md`
+- `CONTEXT.md` — target estimation glossary terms
+
+---
+
+## Key files to touch (when implementing)
+
 ```
-Pure: no `Date.now()`/`Math.random` inside. Merge `opts.thresholds` over `DEFAULT_PREFLIGHT_THRESHOLDS`.
+packages/shared/src/index.ts          # types
+packages/target-estimation/         # candidate new package (TBD)
+apps/desktop/src-tauri/src/         # MAVLink gimbal, DEM, Tauri commands
+apps/web/src/                       # UI, buffer?, map overlay
+apps/server/                        # only if browser path needs DEM
+CONTEXT.md                          # glossary terms only
+docs/adr/                           # if hard runtime split decision
+README.md                           # setup, DEM config, operator workflow
+```
 
-### Types
-`PreflightStatus`, `PreflightCheckResult{ id,label,status,message,details?,optional?,updatedAt? }`, `PreflightHealth{ status,checks,summary,updatedAt }`, `PreflightThresholds`.
+---
 
-### Thresholds (defaults)
-`telemetryMaxAgeMs:3000, minGpsSatellitesReady:8, minGpsSatellitesCaution:5, minBatteryPercentReady:25, minBatteryPercentCaution:15, minLinkQualityReady:70, minLinkQualityCaution:40, maxEphReady:200`.
+## Constraints (from project rules)
 
-### No-telemetry gate (short-circuit)
-`if (!telemetry || telemetry.packetCount === 0 || telemetry.lastPacketAt == null)` → return UNKNOWN, summary `"Waiting for telemetry"`, but still emit all 7 check rows as UNKNOWN. **Note: `packetCount` is top-level, NOT `stats.packetCount`** (the originating chat's snippet had this wrong — use `telemetry.packetCount`).
+- Desktop canonical for production TX16S/CRSF/COM
+- TypeScript in monorepo; shared contracts in `packages/shared`
+- Bump version in `package.json`, `apps/desktop/package.json`, `tauri.conf.json`, `Cargo.toml`
+- MVP scope — no mission planning etc.
+- Windows desktop build verification: `pnpm build:desktop` in PowerShell (agent on macOS may skip — note in PR)
+- Parser golden tests belong in Rust first (ADR 0001)
 
-### Checks (id | label | rules)
-1. `telemetry-freshness` | "Telemetry freshness" | live: `now-lastPacketAt > telemetryMaxAgeMs` → NOT_READY else READY. replay/sim: `optional:true`, UNKNOWN, "Freshness check skipped outside live mode".
-2. `gps` | "GPS" | `fixType==null||<2`→NOT_READY; `==2`→CAUTION; `>=3`: sats≥8 READY / 5–7 CAUTION / **<5 NOT_READY**. eph present & `>maxEphReady` → downgrade READY→CAUTION only (never NOT_READY).
-3. `battery` | "Battery" | `remainingPercent` ≥25 READY / 15–<25 CAUTION / <15 NOT_READY; null→CAUTION blocking ("Battery level unavailable"). No voltage inference.
-4. `radio` | "Radio / Link" | `linkQuality` ≥70 READY / 40–<70 CAUTION / <40 NOT_READY; null→CAUTION blocking ("Link quality unavailable"). Never interpret raw RSSI for status (RSSI → details only).
-5. `home` | "Home reference (first fix)" | `home==null`→CAUTION; invalid/null-island(0,0 or fails `validCoordinate`)→NOT_READY; valid→READY.
-6. `armed` | "Armed state" | `armed===true`→CAUTION; false→READY; missing→`optional` UNKNOWN.
-7. `system-health` | "System health" | `(sensorsEnabled & ~sensorsHealth)!==0`→NOT_READY; healthy→READY; missing bitmask→`optional` UNKNOWN. No statusText keyword scan (statusText→details only).
+---
 
-### Aggregation
-non-optional NOT_READY → NOT_READY; else non-optional CAUTION → CAUTION; else non-optional UNKNOWN → UNKNOWN; else READY. Optional checks' UNKNOWN is excluded from aggregation.
+## Suggested skills
 
-### Summary
-READY → "Ready for flight". Else pick dominant-status check by fixed priority `battery > gps > radio > telemetry-freshness > system-health > home > armed`; format `"Not ready: <msg>"` / `"Caution: <msg>"`. Empty gate → "Waiting for telemetry".
+| Skill | When |
+|-------|------|
+| `grill-with-docs` | Continue design Q&A; update `CONTEXT.md` as terms lock |
+| `caveman` | User wants terse updates |
+| `handoff` | Next session boundary |
 
-### UI
-`PreflightHealthCard` = fixed `Panel` at top of `TelemetrySidebar`, above Alerts (not sortable). Big global badge + summary + compact check list. Colors: READY emerald, CAUTION amber, NOT_READY red, UNKNOWN slate. Reuse existing `Badge`/`Panel`/`tone`. Must not throw on missing fields. App: `useMemo(() => evaluatePreflightHealth(telemetry, Date.now(), { sourceMode: activeSourceMode, home }), [telemetry, activeSourceMode, home])`, pass to sidebar.
+---
 
-### Tests (Vitest, pure fn)
-no telemetry→UNKNOWN; all-good→READY; GPS no fix→NOT_READY; battery <15→NOT_READY & 15–24→CAUTION; link <40→NOT_READY; live stale→NOT_READY; **replay stale timestamps must NOT make global NOT_READY**; mixed severities→correct dominant+summary; missing battery/link→CAUTION; missing sensors→optional UNKNOWN not blocking READY.
+## Acceptance criteria (summary)
 
-### Decisions deferred (out of scope v1)
-- Activity-log status-change logging (would require exposing `addLog` from `useTelemetry` — skipped).
-- Unifying preflight thresholds with `alerts.ts` (reversible, later).
+- Load/configure local DEM
+- Live MAVLink → target estimate ≥5 Hz at image center
+- UI: lat/lon, ranges, quality, map marker, clear missing-data reasons
+- Telemetry from time buffer with configurable video latency
+- Unit test: flat terrain known hit
+- Local DEM raycast returns plausible point
 
-## Acceptance
-Global status + visible checks + missing-telemetry safe + critical→NOT_READY + borderline→CAUTION + good→READY + pure fn w/ tests + read-only/no commands + map/HUD/sidebar/replay/logging intact + typecheck & tests pass.
+---
 
-## Suggested skills for next session
-- **caveman** — user was running caveman mode this session; keep responses compressed.
-- **verify** or **run** — after implementing, launch the app to confirm the card renders and behaves across live/replay/simulation modes.
-- **code-review** — review the diff before PR (correctness + reuse/simplification).
-- **security-review** — minor; feature is read-only, but confirms no command/serial path was added.
+## Agent session notes
+
+- User invoked `/grill-with-docs /caveman /handoff` with full 15-section spec
+- Codebase explored; confirmed gimbal + DEM + raycast are greenfield
+- No commits made
