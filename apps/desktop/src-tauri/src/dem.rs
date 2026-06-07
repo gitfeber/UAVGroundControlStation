@@ -143,7 +143,7 @@ impl DemService {
         let geo_tiff = GeoTiff::read(reader).map_err(|error| DemError::GeoTiff(error.to_string()))?;
 
         let extent = geo_tiff.model_extent();
-        let resolution_m = estimate_resolution_m(&geo_tiff, &extent);
+        let resolution_m = estimate_resolution_m(&geo_tiff, &extent, infer_horizontal_crs(&extent));
         let horizontal_crs = infer_horizontal_crs_label(&extent);
 
         self.geo_tiff = Some(geo_tiff);
@@ -569,16 +569,39 @@ fn dem_failure_reason(error: &DemError) -> Option<String> {
     }
 }
 
-fn estimate_resolution_m(geo_tiff: &GeoTiffReader, extent: &Rect) -> f64 {
-    if geo_tiff.raster_width <= 1 || geo_tiff.raster_height <= 1 {
+fn estimate_resolution_m(geo_tiff: &GeoTiffReader, extent: &Rect, crs: DemHorizontalCrs) -> f64 {
+    estimate_resolution_for_raster(extent, crs, geo_tiff.raster_width, geo_tiff.raster_height)
+}
+
+fn estimate_resolution_for_raster(
+    extent: &Rect,
+    crs: DemHorizontalCrs,
+    raster_width: usize,
+    raster_height: usize,
+) -> f64 {
+    if raster_width <= 1 || raster_height <= 1 {
         return 0.0;
     }
-    let lon_span = (extent.max.x - extent.min.x).abs();
-    let lat_span = (extent.max.y - extent.min.y).abs();
-    let lon_res = lon_span / geo_tiff.raster_width as f64;
-    let lat_res = lat_span / geo_tiff.raster_height as f64;
-    let mid_lat = (extent.max.y + extent.min.y) * 0.5;
-    ((lon_res * meters_per_degree_lon(mid_lat)).abs() + (lat_res * meters_per_degree_lat(mid_lat)).abs()) * 0.5
+
+    match crs {
+        DemHorizontalCrs::Epsg25832Utm32N => {
+            let width_m = (extent.max.x - extent.min.x).abs();
+            let height_m = (extent.max.y - extent.min.y).abs();
+            let res_x = width_m / raster_width as f64;
+            let res_y = height_m / raster_height as f64;
+            res_x.max(res_y)
+        }
+        DemHorizontalCrs::Wgs84Geographic => {
+            let lon_span = (extent.max.x - extent.min.x).abs();
+            let lat_span = (extent.max.y - extent.min.y).abs();
+            let lon_res = lon_span / raster_width as f64;
+            let lat_res = lat_span / raster_height as f64;
+            let mid_lat = (extent.max.y + extent.min.y) * 0.5;
+            ((lon_res * meters_per_degree_lon(mid_lat)).abs()
+                + (lat_res * meters_per_degree_lat(mid_lat)).abs())
+                * 0.5
+        }
+    }
 }
 
 const WGS84_A: f64 = 6_378_137.0;
@@ -672,6 +695,17 @@ mod tests {
         let (easting, northing) = wgs84_to_epsg25832(50.0, 10.0);
         assert!((easting - 571_666.0).abs() < 2.0);
         assert!((northing - 5_539_110.0).abs() < 2.0);
+    }
+
+    #[test]
+    fn projected_resolution_uses_extent_meters() {
+        let extent = Rect::new(
+            Coord { x: 400_000.0, y: 5_200_000.0 },
+            Coord { x: 500_000.0, y: 5_300_000.0 },
+        );
+        let resolution =
+            estimate_resolution_for_raster(&extent, DemHorizontalCrs::Epsg25832Utm32N, 1000, 2000);
+        assert!((resolution - 100.0).abs() < 0.01);
     }
 
     #[test]
