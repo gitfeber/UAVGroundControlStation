@@ -1,0 +1,178 @@
+import type { GimbalState, TelemetryState } from "@uav-ground-control-station/shared";
+import { describe, expect, it } from "vitest";
+import { FlatTerrainProvider } from "./flatTerrain.js";
+import { TargetEstimationSession } from "./session.js";
+
+function sample(overrides: Partial<TelemetryState> & { sampledAtMs: number }): TelemetryState {
+  const { sampledAtMs, position, motion, gimbal, gps, ...rest } = overrides;
+
+  return {
+    connected: true,
+    lastPacketAt: sampledAtMs,
+    sampledAtMs,
+    packetCount: 1,
+    vehicle: {
+      systemId: 1,
+      componentId: 1,
+      type: "quad",
+      armed: false,
+      flightMode: "GUIDED"
+    },
+    position: {
+      lat: 50,
+      lon: 10,
+      altMsl: 500,
+      relativeAlt: 100,
+      headingDeg: 0,
+      groundCourseDeg: 0,
+      ...position
+    },
+    gps: {
+      fixType: 3,
+      fixLabel: "3D Fix",
+      satellites: 12,
+      eph: 0.8,
+      epv: 1.1,
+      ...gps
+    },
+    motion: {
+      groundSpeed: 0,
+      airSpeed: 0,
+      climbRate: 0,
+      rollDeg: 0,
+      pitchDeg: 0,
+      yawDeg: 0,
+      ...motion
+    },
+    battery: {
+      voltage: 16,
+      current: 5,
+      remainingPercent: 80,
+      consumedMah: 100,
+      cellVoltageEstimate: 4
+    },
+    radio: {
+      rssi: 100,
+      remRssi: 100,
+      rxErrors: 0,
+      fixed: 0,
+      txBuffer: 0,
+      linkQuality: 100
+    },
+    system: {
+      loadPercent: 10,
+      statusText: []
+    },
+    stats: {
+      minVoltage: 15,
+      maxAltitude: 100,
+      maxSpeed: 0,
+      maxDistance: 0,
+      maxCurrent: 5,
+      minRssi: 90,
+      warningCount: 0,
+      sessionStartedAt: sampledAtMs - 1000
+    },
+    gimbal: gimbal ?? null,
+    ...rest
+  };
+}
+
+function earthGimbal(pitchDeg: number, yawDeg = 0, rollDeg = 0, sampledAtMs = 1000): GimbalState {
+  return {
+    rollDeg,
+    pitchDeg,
+    yawDeg,
+    source: "mavlink285",
+    sampledAtMs
+  };
+}
+
+describe("TargetEstimationSession", () => {
+  const terrain = new FlatTerrainProvider({ elevationAmslM: 400 });
+
+  it("estimates nadir ground target on flat terrain", () => {
+    const session = new TargetEstimationSession({ terrain });
+    session.push(
+      sample({
+        sampledAtMs: 1000,
+        position: { lat: 50, lon: 10, altMsl: 500, relativeAlt: 100, headingDeg: 0, groundCourseDeg: 0 },
+        gimbal: earthGimbal(-90, 0, 0, 1000)
+      })
+    );
+
+    const estimate = session.estimate({ estimatedAtMs: 1200, atPcTimeMs: 1000 });
+
+    expect(estimate.valid).toBe(true);
+    expect(estimate.quality).toBe("good");
+    expect(estimate.lat).toBeCloseTo(50, 5);
+    expect(estimate.lon).toBeCloseTo(10, 5);
+    expect(estimate.slantRangeM).toBeCloseTo(100, 1);
+    expect(estimate.groundRangeM).toBeCloseTo(0, 1);
+    expect(estimate.terrainElevationM).toBe(400);
+  });
+
+  it("estimates an offset ground target when pitched 45 degrees north", () => {
+    const session = new TargetEstimationSession({ terrain });
+    session.push(
+      sample({
+        sampledAtMs: 2000,
+        gimbal: earthGimbal(-45, 0, 0, 2000)
+      })
+    );
+
+    const estimate = session.estimate({ estimatedAtMs: 2200, atPcTimeMs: 2000 });
+
+    expect(estimate.valid).toBe(true);
+    expect(estimate.groundRangeM).toBeCloseTo(100, 1);
+    expect(estimate.lat).toBeGreaterThan(50);
+    expect(estimate.lon).toBeCloseTo(10, 3);
+  });
+
+  it("blocks replay and simulation source modes", () => {
+    const replaySession = new TargetEstimationSession({ terrain, sourceMode: "replay" });
+    const estimate = replaySession.estimate({ estimatedAtMs: 1000 });
+    expect(estimate.valid).toBe(false);
+    expect(estimate.reasons).toContain("target_estimation_live_only");
+  });
+
+  it("returns gimbal_unavailable when gimbal telemetry is missing", () => {
+    const session = new TargetEstimationSession({ terrain });
+    session.push(sample({ sampledAtMs: 1000, gimbal: null }));
+    const estimate = session.estimate({ estimatedAtMs: 1200, atPcTimeMs: 1000 });
+    expect(estimate.valid).toBe(false);
+    expect(estimate.reasons).toContain("gimbal_unavailable");
+  });
+
+  it("warns when body-fixed attitude fallback is enabled", () => {
+    const session = new TargetEstimationSession({
+      terrain,
+      settings: {
+        videoLatencyMs: 0,
+        altitudeMode: "amsl",
+        altitudeOffsetM: 0,
+        camera: {
+          mountOffsetM: { x: 0, y: 0, z: 0 },
+          calibrationDeg: { roll: 0, pitch: 0, yaw: 0 },
+          gimbalFrame: "earth",
+          pitchSign: "normal",
+          yawReference: "north",
+          allowBodyFixedWhenGimbalMissing: true
+        }
+      }
+    });
+
+    session.push(
+      sample({
+        sampledAtMs: 1000,
+        gimbal: null,
+        motion: { groundSpeed: 0, airSpeed: 0, climbRate: 0, rollDeg: 0, pitchDeg: -90, yawDeg: 0 }
+      })
+    );
+
+    const estimate = session.estimate({ estimatedAtMs: 1000, atPcTimeMs: 1000 });
+    expect(estimate.valid).toBe(true);
+    expect(estimate.quality).toBe("warn");
+    expect(estimate.gimbalSource).toBe("bodyFixed");
+  });
+});
