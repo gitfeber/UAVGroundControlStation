@@ -206,4 +206,17 @@ describe("TargetEstimationSession", () => {
     expect(estimate.groundRangeM).toBeGreaterThan(80);
     expect(estimate.groundRangeM).toBeLessThan(110);
   });
+
+  it("records live estimates in the sample log ring", async () => {
+    const session = new TargetEstimationSession({ terrain, sampleLog: { capacity: 2 } });
+    session.push(sample({ sampledAtMs: 1000, gimbal: earthGimbal(-90, 0, 0, 1000) }));
+    await session.estimate({ estimatedAtMs: 1000, atPcTimeMs: 1000 });
+    session.push(sample({ sampledAtMs: 2000, gimbal: earthGimbal(-90, 0, 0, 2000) }));
+    await session.estimate({ estimatedAtMs: 2000, atPcTimeMs: 2000 });
+    session.push(sample({ sampledAtMs: 3000, gimbal: earthGimbal(-90, 0, 0, 3000) }));
+    await session.estimate({ estimatedAtMs: 3000, atPcTimeMs: 3000 });
+
+    expect(session.getSampleLogSize()).toBe(2);
+    expect(session.getSampleLogEntries()[0]?.recordedAtMs).toBe(2000);
+  });
 });

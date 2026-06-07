@@ -8,10 +8,13 @@ import type {
   TerrainProvider
 } from "@uav-ground-control-station/shared";
 import {
+  exportTargetSampleLogCsv,
+  exportTargetSampleLogJson,
   FlatTerrainProvider,
   TargetEstimationSession
 } from "@uav-ground-control-station/target-estimation";
 import { loadTargetEstimationSettings, loadTerrainModelPath, saveTargetEstimationSettings, saveTerrainModelPath } from "../lib/targetSettings";
+import { downloadTextFile, targetSampleLogFilename } from "../lib/targetSampleLogDownload";
 import { TauriDemTerrainProvider } from "../lib/tauriDemTerrain";
 
 const ESTIMATE_INTERVAL_MS = 100;
@@ -27,6 +30,12 @@ export interface TargetEstimationController {
   clearTerrainModel: () => Promise<void>;
   runtimeMode: "web" | "desktop";
   liveOnlyBlocked: boolean;
+  sampleLogCount: number;
+  sampleLogCapacity: number;
+  exportSampleLogJson: () => void;
+  exportSampleLogCsv: () => void;
+  clearSampleLog: () => void;
+  saveSampleLogToPath: (path: string) => Promise<void>;
 }
 
 function runtimeMode(): "web" | "desktop" {
@@ -49,6 +58,8 @@ export function useTargetEstimation(
   const [terrainPath, setTerrainPathState] = useState(() => loadTerrainModelPath());
   const [terrainMetadata, setTerrainMetadata] = useState<TerrainMetadata | null>(null);
   const [estimate, setEstimate] = useState<TargetEstimate | null>(null);
+  const [sampleLogCount, setSampleLogCount] = useState(0);
+  const [sampleLogCapacity, setSampleLogCapacity] = useState(600);
   const sessionRef = useRef<TargetEstimationSession | null>(null);
   const terrainRef = useRef<TerrainProvider>(new FlatTerrainProvider({ elevationAmslM: 0 }));
   const tauriTerrainRef = useRef<TauriDemTerrainProvider | null>(null);
@@ -60,11 +71,13 @@ export function useTargetEstimation(
         settings,
         sourceMode
       });
+      setSampleLogCapacity(sessionRef.current.getSampleLogCapacity());
       return;
     }
     sessionRef.current.setSettings(settings);
     sessionRef.current.setSourceMode(sourceMode);
     sessionRef.current.setTerrain(terrainRef.current);
+    setSampleLogCapacity(sessionRef.current.getSampleLogCapacity());
   }, [settings, sourceMode]);
 
   useEffect(() => {
@@ -115,6 +128,7 @@ export function useTargetEstimation(
   useEffect(() => {
     if (sourceMode !== "live") {
       setEstimate(null);
+      setSampleLogCount(0);
       return;
     }
     sessionRef.current?.push(withSampleTime(telemetry));
@@ -140,7 +154,10 @@ export function useTargetEstimation(
       }
 
       const next = await session.estimate();
-      if (!cancelled) setEstimate(next);
+      if (!cancelled) {
+        setEstimate(next);
+        setSampleLogCount(session.getSampleLogSize());
+      }
     };
 
     void tick();
@@ -183,6 +200,37 @@ export function useTargetEstimation(
     ensureSession();
   }, [ensureSession, mode]);
 
+  const exportSampleLogJson = useCallback(() => {
+    const samples = sessionRef.current?.getSampleLogEntries() ?? [];
+    downloadTextFile(
+      targetSampleLogFilename("json"),
+      exportTargetSampleLogJson(samples),
+      "application/json"
+    );
+  }, []);
+
+  const exportSampleLogCsv = useCallback(() => {
+    const samples = sessionRef.current?.getSampleLogEntries() ?? [];
+    downloadTextFile(targetSampleLogFilename("csv"), exportTargetSampleLogCsv(samples), "text/csv");
+  }, []);
+
+  const clearSampleLog = useCallback(() => {
+    sessionRef.current?.clearSampleLog();
+    setSampleLogCount(0);
+  }, []);
+
+  const saveSampleLogToPath = useCallback(async (path: string) => {
+    if (mode !== "desktop") return;
+    const samples = sessionRef.current?.getSampleLogEntries() ?? [];
+    const trimmed = path.trim();
+    if (!trimmed) return;
+    const contents = trimmed.toLowerCase().endsWith(".csv")
+      ? exportTargetSampleLogCsv(samples)
+      : exportTargetSampleLogJson(samples);
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("save_target_log", { path: trimmed, contents });
+  }, [mode]);
+
   return {
     estimate,
     settings,
@@ -193,6 +241,12 @@ export function useTargetEstimation(
     loadTerrainModel,
     clearTerrainModel,
     runtimeMode: mode,
-    liveOnlyBlocked: sourceMode !== "live"
+    liveOnlyBlocked: sourceMode !== "live",
+    sampleLogCount,
+    sampleLogCapacity,
+    exportSampleLogJson,
+    exportSampleLogCsv,
+    clearSampleLog,
+    saveSampleLogToPath
   };
 }

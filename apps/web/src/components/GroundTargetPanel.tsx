@@ -21,6 +21,12 @@ export function GroundTargetPanel({
   clearTerrainModel,
   runtimeMode,
   liveOnlyBlocked,
+  sampleLogCount,
+  sampleLogCapacity,
+  exportSampleLogJson,
+  exportSampleLogCsv,
+  clearSampleLog,
+  saveSampleLogToPath,
   sortable,
   onDragStart,
   onDragEnd
@@ -144,6 +150,40 @@ export function GroundTargetPanel({
             Browser dev uses synthetic flat terrain only. Load a real DEM in the desktop app.
           </div>
         )}
+
+        <div className="space-y-2 border-t border-line pt-3">
+          <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.16em] text-slate-500">
+            <span>Target sample log</span>
+            <span className="font-mono text-slate-400">
+              {sampleLogCount}/{sampleLogCapacity}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" className="btn-secondary" onClick={exportSampleLogJson}>
+              Export JSON
+            </button>
+            <button type="button" className="btn-secondary" onClick={exportSampleLogCsv}>
+              Export CSV
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" className="btn-secondary flex-1" onClick={clearSampleLog}>
+              Clear log
+            </button>
+            {runtimeMode === "desktop" ? (
+              <button
+                type="button"
+                className="btn-secondary flex-1"
+                onClick={() => {
+                  const path = window.prompt("Save target sample log path (.json or .csv)", "target-log.json");
+                  if (path) void saveSampleLogToPath(path);
+                }}
+              >
+                Save to path
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
     </Panel>
   );

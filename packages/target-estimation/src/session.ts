@@ -8,6 +8,12 @@ import {
   type TerrainProvider
 } from "@uav-ground-control-station/shared";
 import { estimateTargetFromTelemetry } from "./estimateTarget.js";
+import {
+  createTargetSampleLogEntry,
+  TargetSampleLog,
+  type TargetSampleLogEntry,
+  type TargetSampleLogOptions
+} from "./sampleLog.js";
 import { TelemetryRingBuffer, type TelemetryRingBufferOptions } from "./telemetryBuffer.js";
 
 export interface TargetEstimationSessionOptions {
@@ -15,6 +21,7 @@ export interface TargetEstimationSessionOptions {
   settings?: TargetEstimationSettings;
   sourceMode?: TelemetrySourceMode;
   buffer?: TelemetryRingBufferOptions;
+  sampleLog?: TargetSampleLogOptions;
 }
 
 export interface TargetEstimationEstimateOptions {
@@ -26,12 +33,14 @@ export interface TargetEstimationEstimateOptions {
 
 export class TargetEstimationSession {
   private readonly buffer: TelemetryRingBuffer;
+  private readonly sampleLog: TargetSampleLog;
   private terrain: TerrainProvider;
   private settings: TargetEstimationSettings;
   private sourceMode: TelemetrySourceMode;
 
   constructor(options: TargetEstimationSessionOptions) {
     this.buffer = new TelemetryRingBuffer(options.buffer);
+    this.sampleLog = new TargetSampleLog(options.sampleLog);
     this.terrain = options.terrain;
     this.settings = options.settings ?? DEFAULT_TARGET_ESTIMATION_SETTINGS;
     this.sourceMode = options.sourceMode ?? "live";
@@ -59,6 +68,22 @@ export class TargetEstimationSession {
 
   clearBuffer(): void {
     this.buffer.clear();
+  }
+
+  getSampleLogSize(): number {
+    return this.sampleLog.size;
+  }
+
+  getSampleLogCapacity(): number {
+    return this.sampleLog.capacityLimit;
+  }
+
+  getSampleLogEntries(): readonly TargetSampleLogEntry[] {
+    return this.sampleLog.getSamples();
+  }
+
+  clearSampleLog(): void {
+    this.sampleLog.clear();
   }
 
   estimate(options: TargetEstimationEstimateOptions = {}): Promise<TargetEstimate> {
@@ -89,6 +114,9 @@ export class TargetEstimationSession {
       settings: this.settings,
       estimatedAtMs,
       telemetrySampledAtMs: lookup.interpolated ? atPcTimeMs : lookup.sampledAtMs
+    }).then((result) => {
+      this.sampleLog.append(createTargetSampleLogEntry(result, lookup.state!, estimatedAtMs));
+      return result;
     });
   }
 }

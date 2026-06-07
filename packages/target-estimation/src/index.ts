@@ -11,6 +11,17 @@ export {
 } from "./quality.js";
 export { depressionAngleDeg, opticalAxisEnu, resolveGimbalAttitude, type ResolvedGimbalAttitude } from "./gimbal.js";
 export { enuDeltaToGeodetic, metersPerDegreeLat, metersPerDegreeLon, normalizeVector } from "./geo.js";
+export {
+  createTargetSampleLogEntry,
+  DEFAULT_TARGET_SAMPLE_LOG_CAPACITY,
+  exportTargetSampleLogCsv,
+  exportTargetSampleLogJson,
+  slimTelemetrySlice,
+  TargetSampleLog,
+  type TargetSampleLogEntry,
+  type TargetSampleLogOptions,
+  type TargetSampleTelemetrySlice
+} from "./sampleLog.js";
 export { TargetEstimationSession, type TargetEstimationEstimateOptions, type TargetEstimationSessionOptions } from "./session.js";
 export {
   DEFAULT_TELEMETRY_BUFFER_RETENTION_MS,

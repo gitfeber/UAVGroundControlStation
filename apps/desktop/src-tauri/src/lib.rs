@@ -474,6 +474,15 @@ fn get_elevations_along_ray(
         .map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+fn save_target_log(path: String, contents: String) -> Result<(), String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("target log path is empty".to_string());
+    }
+    std::fs::write(trimmed, contents).map_err(|error| error.to_string())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .manage(DesktopState {
@@ -502,7 +511,8 @@ pub fn run() {
             clear_terrain_model,
             sample_terrain_amsl_at,
             get_elevation_at_enu,
-            get_elevations_along_ray
+            get_elevations_along_ray,
+            save_target_log
         ])
         .run(tauri::generate_context!())
         .expect("error while running UAV Ground Control Station desktop app");
