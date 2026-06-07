@@ -97,6 +97,15 @@ describe("foldEvents — controlled track", () => {
     expect(reconstructUpTo(events).track).toEqual(reconstructUpTo(events).track);
   });
 
+  it("reconstructs a fully deterministic state with no wall-clock leakage", () => {
+    // Regression guard: createEmptyTelemetryState() seeds sessionStartedAt with
+    // Date.now(); reconstruction must override it with a stable 0 so repeated
+    // rebuilds are byte-identical regardless of timing.
+    expect(createEmptyReplayState().stats.sessionStartedAt).toBe(0);
+    expect(reconstructUpTo(events).state).toEqual(reconstructUpTo(events).state);
+    expect(reconstructUpTo(events).state.stats.sessionStartedAt).toBe(0);
+  });
+
   it("seeking forward then backward reconstructs identical state and track", () => {
     const forward = reconstructUpTo(events.slice(0, 5));
     const backThenForward = reconstructUpTo(events.slice(0, 5));

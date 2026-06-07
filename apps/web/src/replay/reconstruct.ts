@@ -26,7 +26,13 @@ export interface ReconstructResult {
 }
 
 export function createEmptyReplayState(): TelemetryState {
-  return createEmptyTelemetryState();
+  const state = createEmptyTelemetryState();
+  // Reconstruction must be deterministic (same log -> same state every time), so
+  // the baseline must never carry a wall-clock time. Real logs include
+  // stats.sessionStartedAt and override this; logs that omit it get a stable 0
+  // instead of Date.now().
+  state.stats.sessionStartedAt = 0;
+  return state;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -85,8 +91,10 @@ function deepMerge<T extends Record<string, unknown>>(base: T, patch: Record<str
 export function applyEvent(state: TelemetryState, event: NormalizedReplayEvent): TelemetryState {
   if (event.type === "telemetry" && event.telemetry) {
     // Full replacement: merge onto a fresh empty state to normalize + sanitize.
+    // Use the deterministic replay baseline (no wall clock) so repeated rebuilds
+    // of the same log are byte-identical.
     return deepMerge(
-      createEmptyTelemetryState() as unknown as Record<string, unknown>,
+      createEmptyReplayState() as unknown as Record<string, unknown>,
       event.telemetry as unknown as Record<string, unknown>
     ) as unknown as TelemetryState;
   }
