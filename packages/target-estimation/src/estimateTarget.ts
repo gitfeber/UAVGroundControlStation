@@ -17,7 +17,7 @@ import {
 } from "./quality.js";
 import { intersectRayWithTerrain } from "./rayIntersect.js";
 import type { TelemetryLookupResult } from "./telemetryBuffer.js";
-import { terrainAmslAt } from "./terrainUtils.js";
+import { prepareTerrainAnchor } from "./terrainUtils.js";
 
 export interface EstimateTargetInput {
   telemetry: TelemetryState;
@@ -85,6 +85,13 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
   estimate.anchorLat = lat;
   estimate.anchorLon = lon;
 
+  const anchorPrep = await prepareTerrainAnchor(terrain, lat, lon);
+  if (!anchorPrep.ok) {
+    reasons.push(anchorPrep.reason);
+    estimate.reasons = reasons;
+    return finalizeEstimate(estimate, reasons, null);
+  }
+
   if ((telemetry.gps.fixType ?? 0) < 3) {
     reasons.push("gps_no_3d_fix");
   }
@@ -107,18 +114,18 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
     reasons.push("gimbal_body_fixed_fallback");
   }
 
+  const terrainAtAnchor = anchorPrep.elevationAmslM;
+
   let rayOriginAltMsl: number | null = null;
   if (settings.altitudeMode === "amsl") {
     if (telemetry.position.altMsl !== null) {
       rayOriginAltMsl = telemetry.position.altMsl + settings.altitudeOffsetM;
     } else if (telemetry.position.relativeAlt !== null) {
-      const terrainAtUav = terrainAmslAt(terrain, lat, lon);
-      rayOriginAltMsl = terrainAtUav + telemetry.position.relativeAlt + settings.altitudeOffsetM;
+      rayOriginAltMsl = terrainAtAnchor + telemetry.position.relativeAlt + settings.altitudeOffsetM;
       reasons.push("using_relative_altitude_fallback");
     }
   } else if (telemetry.position.relativeAlt !== null) {
-    const terrainAtUav = terrainAmslAt(terrain, lat, lon);
-    rayOriginAltMsl = terrainAtUav + telemetry.position.relativeAlt + settings.altitudeOffsetM;
+    rayOriginAltMsl = terrainAtAnchor + telemetry.position.relativeAlt + settings.altitudeOffsetM;
   }
 
   if (rayOriginAltMsl === null) {
@@ -129,7 +136,6 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
 
   estimate.uavAltM = rayOriginAltMsl;
 
-  const terrainAtAnchor = terrainAmslAt(terrain, lat, lon);
   const originEnu: EnuTuple = [0, 0, rayOriginAltMsl - terrainAtAnchor];
   const axis = opticalAxisEnu(gimbal.rollDeg, gimbal.pitchDeg, gimbal.yawDeg);
   const directionEnu = normalizeVector(axis[0], axis[1], axis[2]) as EnuTuple;

@@ -4,7 +4,12 @@ export { FlatTerrainProvider, type FlatTerrainProviderOptions } from "./flatTerr
 export { MissingDemTerrainProvider } from "./missingDemTerrain.js";
 export { intersectRayWithTerrain, type RayIntersectFailureReason, type RayIntersectOptions, type RayIntersectionHit, type RayIntersectResult } from "./rayIntersect.js";
 export { SlopedPlaneTerrainProvider, type SlopedPlaneTerrainProviderOptions } from "./slopedTerrain.js";
-export { terrainAmslAt, type AnchorTerrainProvider } from "./terrainUtils.js";
+export {
+  prepareTerrainAnchor,
+  terrainAmslAt,
+  type AnchorCapableTerrainProvider,
+  type TerrainAnchorPrepareResult
+} from "./terrainUtils.js";
 export {
   aggregateTargetQuality,
   DEFAULT_GPS_FEW_SATELLITES_WARN,

@@ -153,17 +153,6 @@ export function useTargetEstimation(
       const session = sessionRef.current;
       if (!session || cancelled) return;
 
-      const lat = telemetry.position.lat;
-      const lon = telemetry.position.lon;
-      const tauriTerrain = tauriTerrainRef.current;
-      if (tauriTerrain && lat !== null && lon !== null) {
-        try {
-          await tauriTerrain.prepareEstimateAnchor(lat, lon);
-        } catch {
-          /* estimate will surface dem errors */
-        }
-      }
-
       const next = await session.estimate();
       if (!cancelled) {
         setEstimate(next);
@@ -180,7 +169,7 @@ export function useTargetEstimation(
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [sourceMode, settings.videoLatencyMs, telemetry.position.lat, telemetry.position.lon]);
+  }, [sourceMode, settings.videoLatencyMs]);
 
   const setSettings = useCallback((next: TargetEstimationSettings) => {
     setSettingsState(next);

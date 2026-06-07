@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { estimateTargetFromTelemetry } from "./estimateTarget.js";
 import { FlatTerrainProvider } from "./flatTerrain.js";
 import { MissingDemTerrainProvider } from "./missingDemTerrain.js";
+import type { AnchorCapableTerrainProvider } from "./terrainUtils.js";
 
 function baseTelemetry(overrides: Partial<TelemetryState> = {}): TelemetryState {
   const sampledAtMs = 1000;
@@ -107,6 +108,41 @@ describe("estimateTargetFromTelemetry quality gates", () => {
     expect(estimate.valid).toBe(true);
     expect(estimate.quality).toBe("warn");
     expect(estimate.reasons).toContain("gps_few_satellites");
+  });
+
+  it("reports dem_out_of_coverage when anchor preparation fails", async () => {
+    const failingAnchor: AnchorCapableTerrainProvider = {
+      metadata: {
+        verticalDatum: "test",
+        horizontalCrs: "EPSG:25832",
+        resolutionM: 1
+      },
+      async prepareEstimateAnchor() {
+        return { ok: false, reason: "dem_out_of_coverage" };
+      },
+      getAnchorElevationAmsl() {
+        return null;
+      },
+      async getElevationAtEnu() {
+        return { ok: false, reason: "dem_out_of_coverage" };
+      },
+      async getElevationsAlongRay(_origin, _direction, distancesM) {
+        return distancesM.map(() => ({ ok: false, reason: "dem_out_of_coverage" as const }));
+      }
+    };
+
+    const estimate = await estimateTargetFromTelemetry({
+      telemetry: baseTelemetry(),
+      lookup: { state: baseTelemetry(), sampledAtMs: 1000, interpolated: false, ageMs: 0, trailingGapMs: 0 },
+      terrain: failingAnchor,
+      settings,
+      estimatedAtMs: 1000,
+      telemetrySampledAtMs: 1000
+    });
+
+    expect(estimate.valid).toBe(false);
+    expect(estimate.quality).toBe("bad");
+    expect(estimate.reasons).toContain("dem_out_of_coverage");
   });
 
   it("warns on mavlink265 gimbal mount orientation", async () => {
