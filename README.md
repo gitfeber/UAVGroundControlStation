@@ -34,6 +34,7 @@ Prefer bench testing and disconnected telemetry validation before using the soft
 - **Activity log** — connection status, parser stats, frame message stats
 - **Optional video stream** (MJPEG, etc.) via environment variables
 - **Session logging** and reset for new flights
+- **Replay & Simulation** — frontend-only, read-only telemetry sources that drive the same dashboard without hardware: replay recorded `.jsonl`/`.json` logs (start/pause/seek/step, speed and timing modes) or run deterministic seeded simulations. See [`docs/replay-mode.md`](docs/replay-mode.md) and [`docs/adr/0003-frontend-only-replay-simulation.md`](docs/adr/0003-frontend-only-replay-simulation.md)
 - **Shared data model** [`TelemetryState`](packages/shared/src/index.ts) for desktop and browser
 
 ## Screenshots
