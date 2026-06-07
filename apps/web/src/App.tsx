@@ -58,9 +58,19 @@ export function App() {
 
   const alerts = useMemo(() => getAlerts(telemetry, status), [telemetry, status]);
 
+  // A 1 Hz wall-clock tick keyed into the preflight memo. Keep Date.now() out of
+  // render (react-hooks/purity), and ensure freshness re-evaluates even when
+  // telemetry stops arriving (a stale stream never changes the telemetry ref).
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const preflight = useMemo(
-    () => evaluatePreflightHealth(telemetry, Date.now(), { sourceMode: activeSourceMode, home }),
-    [telemetry, activeSourceMode, home]
+    () => evaluatePreflightHealth(telemetry, now, { sourceMode: activeSourceMode, home }),
+    [telemetry, now, activeSourceMode, home]
   );
 
   return (
