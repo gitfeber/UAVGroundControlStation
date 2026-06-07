@@ -1,16 +1,22 @@
 name: CI
 
+# Main-branch pipeline: validates and then publishes a prerelease. Pull-request
+# validation (without releasing) lives in branch-checks.yml.
 on:
   push:
     branches: [main, master]
-  pull_request:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# Default to read-only; the publish job opts up to contents: write where needed.
+permissions:
+  contents: read
+
 jobs:
   node:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
@@ -32,10 +38,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
+      - run: pnpm test
       - run: pnpm build
 
   rust:
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: apps/desktop/src-tauri
@@ -44,6 +52,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           toolchain: stable
+      - name: Rust cache
+        uses: swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
@@ -60,6 +72,7 @@ jobs:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     permissions:
       contents: write
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
