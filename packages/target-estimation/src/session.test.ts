@@ -159,6 +159,15 @@ describe("TargetEstimationSession", () => {
           pitchSign: "normal",
           yawReference: "north",
           allowBodyFixedWhenGimbalMissing: true
+        },
+        raycast: {
+          maxRangeM: 20_000,
+          stepM: 5,
+          minDownAngleDeg: 5,
+          refineIterations: 14,
+          staleTelemetryWarnMs: 500,
+          gpsLowAccuracyEphM: 2.0,
+          gpsFewSatellitesWarn: 8
         }
       }
     });

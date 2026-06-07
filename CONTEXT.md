@@ -69,7 +69,7 @@ Operator-facing trust level for a ground-target estimate — `good`, `warn`, or 
 _Avoid_: Confidence score, accuracy percentage
 
 **Estimate invalid reason**:
-Short machine reason on a failed or degraded target estimate (e.g. `gimbal_unavailable`, `dem_out_of_coverage`) so the operator knows what to fix.
+Short machine reason on a failed or degraded target estimate (e.g. `gimbal_unavailable`, `dem_not_loaded`, `dem_out_of_coverage`, `gps_few_satellites`) so the operator knows what to fix. Bad gates invalidate the estimate; warn gates (`using_relative_altitude_fallback`, `gimbal_body_fixed_fallback`, `gimbal_mount_orientation`, `telemetry_stale`, `gps_low_accuracy`) still show coordinates when math allows.
 _Avoid_: Error code, status message
 
 **Ground target panel**:
