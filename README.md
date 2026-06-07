@@ -177,6 +177,8 @@ Frontend wrapper: [`apps/web/src/lib/tauriDemTerrain.ts`](apps/web/src/lib/tauri
 
 Ground target estimation (image center) runs in **live** mode only. Use the sortable **Ground Target** sidebar card for full readout and settings (`localStorage` keys `uav-gcs.target.*`). The camera panel shows a crosshair plus compact lat/lon, slant range, and quality. Valid or warn estimates also draw an orange map marker and dashed line-of-sight from the UAV. Desktop: paste or load a local GeoTIFF path in the sidebar; browser dev uses synthetic flat terrain. The sidebar also keeps an in-memory **target sample log** (600 samples) with manual JSON/CSV export; desktop can optionally save via `save_target_log`.
 
+On the **desktop** link, gimbal attitude for estimation comes from MAVLink **285** (`GIMBAL_DEVICE_ATTITUDE_STATUS`, preferred) or compact legacy **265** euler payloads (skipped when the frame is large enough to be standard `VIDEO_STREAM_INFORMATION`). Vehicle **ATTITUDE** remains the body-fixed fallback in TypeScript when no gimbal message is present. Pose-related frames also populate `sampledAtMs` for ring-buffer alignment; check the activity panel for `GIMBAL_DEVICE_ATTITUDE_STATUS` / `GIMBAL_LEGACY` frame counts.
+
 ## Configuration (browser stack)
 
 `.env` at the repository root (see [`.env.example`](.env.example)):

@@ -17,6 +17,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 mod crsf;
 mod dem;
+mod gimbal;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -65,6 +66,7 @@ struct LoggingStatus {
 struct TelemetryState {
     connected: bool,
     last_packet_at: Option<u64>,
+    sampled_at_ms: Option<u64>,
     packet_count: u64,
     vehicle: VehicleState,
     position: PositionState,
@@ -74,6 +76,7 @@ struct TelemetryState {
     radio: RadioState,
     system: SystemState,
     stats: StatsState,
+    gimbal: Option<gimbal::GimbalState>,
 }
 
 #[derive(Clone, Serialize)]
@@ -793,7 +796,7 @@ fn is_supported_mavlink_message(message_id: u32) -> bool {
     matches!(
         message_id,
         0 | 1 | 2 | 24 | 27 | 29 | 30 | 32 | 33 | 36 | 42 | 62 | 65 | 74 | 87 | 109 | 125 | 136 | 141 | 147 | 152
-            | 163 | 165 | 168 | 178 | 193 | 241 | 245 | 253
+            | 163 | 165 | 168 | 178 | 193 | 241 | 245 | 253 | 265 | 285
     )
 }
 
@@ -814,6 +817,8 @@ fn apply_frame(worker_state: &WorkerState, frame: MavlinkFrame) -> Result<(), St
         1 => update_sys_status(&mut telemetry, &frame.payload),
         24 => update_gps_raw_int(&mut telemetry, &frame.payload),
         30 => update_attitude(&mut telemetry, &frame.payload),
+        265 => update_gimbal_legacy(&mut telemetry, &frame.payload),
+        285 => update_gimbal_device_attitude_status(&mut telemetry, &frame.payload),
         33 => update_global_position_int(&mut telemetry, &frame.payload),
         62 => update_nav_controller_output(&mut telemetry, &frame.payload),
         65 => update_rc_channels(&mut telemetry, &frame.payload),
@@ -1014,6 +1019,8 @@ fn mavlink_crc_extra(message_id: u32) -> Option<u8> {
         241 => 90,
         245 => 130,
         253 => 83,
+        265 => 274,
+        285 => 137,
         _ => return None,
     };
     Some(seed)
@@ -1023,6 +1030,7 @@ fn initial_telemetry() -> TelemetryState {
     TelemetryState {
         connected: false,
         last_packet_at: None,
+        sampled_at_ms: None,
         packet_count: 0,
         vehicle: VehicleState {
             system_id: None,
@@ -1088,6 +1096,7 @@ fn initial_telemetry() -> TelemetryState {
             warning_count: 0,
             session_started_at: now_ms(),
         },
+        gimbal: None,
     }
 }
 
@@ -1097,6 +1106,10 @@ pub(crate) fn mark_packet(telemetry: &mut TelemetryState, system_id: u8, compone
     telemetry.packet_count += 1;
     telemetry.vehicle.system_id = Some(system_id);
     telemetry.vehicle.component_id = Some(component_id);
+}
+
+fn touch_sample_time(telemetry: &mut TelemetryState) {
+    telemetry.sampled_at_ms = Some(now_ms());
 }
 
 fn update_heartbeat(telemetry: &mut TelemetryState, payload: &[u8]) {
@@ -1183,6 +1196,7 @@ fn update_gps_raw_int(telemetry: &mut TelemetryState, payload: &[u8]) {
     telemetry.position.alt_msl = read_i32(payload, 16).map(|value| value as f64 / 1000.0);
     telemetry.motion.ground_speed = read_u16(payload, 24).and_then(|value| (value != u16::MAX).then_some(value as f64 / 100.0));
     telemetry.position.ground_course_deg = read_u16(payload, 26).and_then(|value| (value != u16::MAX).then_some(value as f64 / 100.0));
+    touch_sample_time(telemetry);
     update_stats(telemetry);
 }
 
@@ -1202,6 +1216,7 @@ fn update_global_position_int(telemetry: &mut TelemetryState, payload: &[u8]) {
     telemetry.position.alt_msl = read_i32(payload, 12).map(|value| value as f64 / 1000.0);
     telemetry.position.relative_alt = read_i32(payload, 16).map(|value| value as f64 / 1000.0);
     telemetry.position.heading_deg = read_u16(payload, 26).and_then(|value| (value != u16::MAX).then_some(value as f64 / 100.0));
+    touch_sample_time(telemetry);
     update_stats(telemetry);
 }
 
@@ -1226,6 +1241,24 @@ fn update_attitude(telemetry: &mut TelemetryState, payload: &[u8]) {
     telemetry.motion.roll_deg = read_f32(payload, 4).map(|value| radians_to_degrees(value as f64));
     telemetry.motion.pitch_deg = read_f32(payload, 8).map(|value| radians_to_degrees(value as f64));
     telemetry.motion.yaw_deg = read_f32(payload, 12).map(|value| normalize_heading(radians_to_degrees(value as f64)));
+    touch_sample_time(telemetry);
+}
+
+fn update_gimbal_device_attitude_status(telemetry: &mut TelemetryState, payload: &[u8]) {
+    let Some(sample) = gimbal::decode_gimbal_device_attitude_status(payload, now_ms()) else {
+        return;
+    };
+    gimbal::apply_gimbal_sample(telemetry, sample);
+}
+
+fn update_gimbal_legacy(telemetry: &mut TelemetryState, payload: &[u8]) {
+    if payload.len() > 32 {
+        return;
+    }
+    let Some(sample) = gimbal::decode_gimbal_legacy_euler(payload, now_ms()) else {
+        return;
+    };
+    gimbal::apply_gimbal_sample(telemetry, sample);
 }
 
 fn update_radio_status(telemetry: &mut TelemetryState, payload: &[u8]) {
@@ -1552,6 +1585,8 @@ fn mavlink_message_label(message_id: u32) -> String {
         109 => "RADIO_STATUS",
         147 => "BATTERY_STATUS",
         253 => "STATUSTEXT",
+        265 => "GIMBAL_LEGACY",
+        285 => "GIMBAL_DEVICE_ATTITUDE_STATUS",
         2 => "SYSTEM_TIME",
         27 => "RAW_IMU",
         29 => "SCALED_PRESSURE",
@@ -1670,5 +1705,28 @@ mod parser_tests {
         let frames = parser.push_isolated(&frame);
         assert!(frames.is_empty());
         assert!(parser.take_parser_errors() > 0);
+    }
+
+    #[test]
+    fn parses_gimbal_device_attitude_status_frame() {
+        let mut payload = vec![0_u8; 40];
+        payload[8..12].copy_from_slice(&1.0_f32.to_le_bytes());
+        let mut sequence = 0_u8;
+        let frame = mavlink_v1_packet(285, &payload, 137, &mut sequence);
+        let mut parser = MavlinkFrameParser::new();
+        let frames = parser.push_isolated(&frame);
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].message_id, 285);
+    }
+
+    #[test]
+    fn gimbal_device_attitude_status_updates_telemetry_state() {
+        let mut telemetry = initial_telemetry();
+        let mut payload = vec![0_u8; 40];
+        payload[8..12].copy_from_slice(&1.0_f32.to_le_bytes());
+        update_gimbal_device_attitude_status(&mut telemetry, &payload);
+        let gimbal = telemetry.gimbal.expect("gimbal");
+        assert_eq!(gimbal.source, "mavlink285");
+        assert!(telemetry.sampled_at_ms.is_some());
     }
 }
