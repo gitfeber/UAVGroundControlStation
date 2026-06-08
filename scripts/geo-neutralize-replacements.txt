@@ -1,42 +1,12 @@
-***REMOVED***
-***REMOVED***
-
-literal:EPSG:25832 projected DEM==>EPSG:25832 projected DEM
-literal:EPSG:25832 / UTM32==>EPSG:25832 / UTM32
-literal:EPSG:25832 projected DEM smoke test (desktop operator)==>Projected DEM smoke test (desktop operator)
-literal:Generic UTM32N reference — expected easting/northing within ~1 m of recomputed values.==>Generic UTM32N reference — expected easting/northing within ~1 m of recomputed values.
-literal:wgs84_to_epsg25832_matches_reference_point==>wgs84_to_epsg25832_matches_reference_point
-literal:50.0==>50.0
-literal:10.0==>10.0
-literal:571_666.0==>571_666.0
-literal:5_539_110.0==>5_539_110.0
-literal:lat: 50, lon: 10==>lat: 50, lon: 10
-literal:lat: 50.1, lon: 10.2==>lat: 50.1, lon: 10.2
-literal:lat: 50.1, lon: 10.1==>lat: 50.1, lon: 10.1
-literal:lat: 50.2, lon: 10.2==>lat: 50.2, lon: 10.2
-literal:anchorLat).toBe(50.1)==>anchorLat).toBe(50.1)
-literal:lat).toBe(50.1)==>lat).toBe(50.1)
-literal:prepareEstimateAnchor(50.1, 10.2)==>prepareEstimateAnchor(50.1, 10.2)
-literal:terrainAmslAt(50.1, 10.2)==>terrainAmslAt(50.1, 10.2)
-literal:anchorLat).toBe(50)==>anchorLat).toBe(50)
-literal:prepareEstimateAnchor(50, 10)==>prepareEstimateAnchor(50, 10)
-literal:lat: 50,==>lat: 50,
-literal:lon: 10,==>lon: 10,
-literal:lat).toBe(50)==>lat).toBe(50)
-literal:lat).toBeCloseTo(50, 5)==>lat).toBeCloseTo(50, 5)
-literal:lon).toBeCloseTo(10, 5)==>lon).toBeCloseTo(10, 5)
-literal:lat).toBeGreaterThan(50)==>lat).toBeGreaterThan(50)
-literal:lon).toBeCloseTo(10, 3)==>lon).toBeCloseTo(10, 3)
-literal:lat).toBeCloseTo(50.5)==>lat).toBeCloseTo(50.5)
-literal:lon).toBeCloseTo(10.5)==>lon).toBeCloseTo(10.5)
-literal:anchor_lat = 50.0==>anchor_lat = 50.0
-literal:anchor_lon = 10.0==>anchor_lon = 10.0
-literal:center_lat: 50.0==>center_lat: 50.0
-literal:center_lon: 10.0==>center_lon: 10.0
-literal:west_lon: 10.0==>west_lon: 10.0
-literal:north_lat: 50.0001==>north_lat: 50.0001
-literal:sample_geographic(50.0, 10.00005)==>sample_geographic(50.0, 10.00005)
-literal:EPSG:25832 projected DEM and similar projected GeoTIFFs.==>EPSG:25832 projected DEM GeoTIFFs (e.g. 1 m DGM-class tiles).
-literal:heuristics for EPSG:25832 projected DEM v1.==>heuristics for EPSG:25832 / WGS84 tiles.
-literal:e.g. EPSG:25832 projected DEM)==>e.g. EPSG:25832 projected DEM or EPSG:4326 geographic GeoTIFF)
-literal:large EPSG:25832 projected DEM GeoTIFF==>large projected DEM GeoTIFFs
+# Historical note: feat/ground-target-estimation branch history was rewritten with
+# git-filter-repo (2026-06) to remove region-specific test fixtures and docs.
+#
+# Replacement rules are not checked in verbatim (they contained the old tokens).
+# Backup of pre-rewrite tip: branch backup/feat-ground-target-estimation
+#
+# Re-run template (generate a fresh literal:old==>new map locally if needed):
+#   git filter-repo --force --refs <branch> \
+#     --replace-text <your-replacements.txt> \
+#     --replace-message scripts/geo-neutralize-message-replacements.txt
+#
+# Avoid broad patterns like bare "lon: 11," — they can break unrelated test endpoints.

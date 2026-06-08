@@ -86,13 +86,13 @@ describe("lerpAngleDeg", () => {
 describe("interpolateTelemetryState", () => {
   it("interpolates pose fields and stamps sampledAtMs", () => {
     const before = sample({ sampledAtMs: 1000, position: { lat: 50, lon: 10, altMsl: 500, relativeAlt: 120, headingDeg: 0, groundCourseDeg: 0 } });
-    const after = sample({ sampledAtMs: 2000, position: { lat: 51, lon: 10, altMsl: 600, relativeAlt: 220, headingDeg: 20, groundCourseDeg: 20 } });
+    const after = sample({ sampledAtMs: 2000, position: { lat: 51, lon: 12, altMsl: 600, relativeAlt: 220, headingDeg: 20, groundCourseDeg: 20 } });
 
     const mid = interpolateTelemetryState(before, after, 0.5);
 
     expect(mid.sampledAtMs).toBe(1500);
     expect(mid.position.lat).toBeCloseTo(50.5);
-    expect(mid.position.lon).toBeCloseTo(10.5);
+    expect(mid.position.lon).toBeCloseTo(11);
     expect(mid.position.altMsl).toBeCloseTo(550);
     expect(mid.position.headingDeg).toBeCloseTo(10);
     expect(mid.vehicle.flightMode).toBe("GUIDED");
@@ -147,7 +147,7 @@ describe("TelemetryRingBuffer", () => {
   it("returns exact bracketing samples without interpolation", () => {
     const buffer = new TelemetryRingBuffer();
     buffer.push(sample({ sampledAtMs: 1000, position: { lat: 50, lon: 10, altMsl: 500, relativeAlt: 120, headingDeg: 0, groundCourseDeg: 0 } }));
-    buffer.push(sample({ sampledAtMs: 2000, position: { lat: 51, lon: 10, altMsl: 600, relativeAlt: 220, headingDeg: 20, groundCourseDeg: 20 } }));
+    buffer.push(sample({ sampledAtMs: 2000, position: { lat: 51, lon: 12, altMsl: 600, relativeAlt: 220, headingDeg: 20, groundCourseDeg: 20 } }));
 
     const hit = buffer.lookup(1000);
     expect(hit.interpolated).toBe(false);
@@ -171,7 +171,7 @@ describe("TelemetryRingBuffer", () => {
   it("holds newest sample when query time is in the future", () => {
     const buffer = new TelemetryRingBuffer();
     buffer.push(sample({ sampledAtMs: 1000 }));
-    buffer.push(sample({ sampledAtMs: 2000, position: { lat: 51, lon: 10, altMsl: 600, relativeAlt: 220, headingDeg: 20, groundCourseDeg: 20 } }));
+    buffer.push(sample({ sampledAtMs: 2000, position: { lat: 51, lon: 12, altMsl: 600, relativeAlt: 220, headingDeg: 20, groundCourseDeg: 20 } }));
 
     const hit = buffer.lookup(2500);
     expect(hit.interpolated).toBe(false);
