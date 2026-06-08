@@ -1,7 +1,7 @@
 //! Local DEM window cache and GeoTIFF elevation sampling for target estimation.
 
 use geo_types::{Coord, Rect};
-use geotiff::GeoTiff;
+use geotiff::{GeoKeyDirectory, GeoTiff};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
@@ -64,6 +64,8 @@ pub struct DemService {
     geo_tiff: Option<GeoTiffReader>,
     metadata: TerrainMetadataResponse,
     window: Option<DemWindow>,
+    horizontal_crs: Option<DemHorizontalCrs>,
+    band_nodata: Option<f32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -97,6 +99,7 @@ pub enum DemError {
     OutOfCoverage,
     NoData,
     InvalidArgument(String),
+    UnsupportedCrs(String),
     Io(String),
     GeoTiff(String),
 }
@@ -108,6 +111,7 @@ impl std::fmt::Display for DemError {
             DemError::OutOfCoverage => write!(f, "dem out of coverage"),
             DemError::NoData => write!(f, "dem nodata"),
             DemError::InvalidArgument(message) => write!(f, "{message}"),
+            DemError::UnsupportedCrs(message) => write!(f, "{message}"),
             DemError::Io(message) => write!(f, "{message}"),
             DemError::GeoTiff(message) => write!(f, "{message}"),
         }
@@ -120,6 +124,8 @@ impl DemService {
             geo_tiff: None,
             metadata: empty_metadata(),
             window: None,
+            horizontal_crs: None,
+            band_nodata: None,
         }
     }
 
@@ -142,12 +148,14 @@ impl DemService {
         let reader = BufReader::new(file);
         let geo_tiff = GeoTiff::read(reader).map_err(|error| DemError::GeoTiff(error.to_string()))?;
 
+        let (crs, horizontal_crs) = detect_horizontal_crs(&geo_tiff)?;
         let extent = geo_tiff.model_extent();
-        let resolution_m = estimate_resolution_m(&geo_tiff, &extent, infer_horizontal_crs(&extent));
-        let horizontal_crs = infer_horizontal_crs_label(&extent);
+        let resolution_m = estimate_resolution_m(&geo_tiff, &extent, crs);
 
         self.geo_tiff = Some(geo_tiff);
         self.window = None;
+        self.horizontal_crs = Some(crs);
+        self.band_nodata = None;
         self.metadata = TerrainMetadataResponse {
             vertical_datum: "geotiff-band-0".to_string(),
             horizontal_crs,
@@ -162,6 +170,8 @@ impl DemService {
     pub fn clear_terrain_model(&mut self) {
         self.geo_tiff = None;
         self.window = None;
+        self.horizontal_crs = None;
+        self.band_nodata = None;
         self.metadata = empty_metadata();
     }
 
@@ -300,6 +310,7 @@ impl DemService {
                 if lat < window.south_lat() || lat > window.north_lat || lon < window.west_lon || lon > window.east_lon() {
                     return Err(DemError::OutOfCoverage);
                 }
+                // Inside the cached window but empty/nodata cells surface as dem_nodata.
                 window.sample_geographic(lat, lon).ok_or(DemError::NoData)?
             }
             DemHorizontalCrs::Epsg25832Utm32N => {
@@ -352,10 +363,13 @@ impl DemService {
         };
 
         if needs_recenter {
+            let crs = self.horizontal_crs.ok_or(DemError::NotLoaded)?;
             self.window = Some(build_window(
                 self.geo_tiff.as_ref().ok_or(DemError::NotLoaded)?,
                 center_lat,
                 center_lon,
+                crs,
+                self.band_nodata,
             )?);
         }
 
@@ -458,29 +472,73 @@ fn empty_metadata() -> TerrainMetadataResponse {
     }
 }
 
-fn infer_horizontal_crs(extent: &Rect) -> DemHorizontalCrs {
+/// Prefer GeoTIFF GeoKey EPSG codes (`geotiff` 0.1 exposes `geo_key_directory`).
+/// When tags are missing, fall back to model-extent heuristics for EPSG:25832 projected DEM v1.
+fn detect_horizontal_crs(geo_tiff: &GeoTiffReader) -> Result<(DemHorizontalCrs, String), DemError> {
+    if let Some(result) = detect_horizontal_crs_from_geokeys(&geo_tiff.geo_key_directory) {
+        return result;
+    }
+
+    let extent = geo_tiff.model_extent();
+    let crs = infer_horizontal_crs_from_extent(&extent)?;
+    Ok((crs, horizontal_crs_label(crs)))
+}
+
+fn detect_horizontal_crs_from_geokeys(
+    keys: &GeoKeyDirectory,
+) -> Option<Result<(DemHorizontalCrs, String), DemError>> {
+    if let Some(epsg) = keys.projected_type {
+        return Some(match epsg {
+            25832 => Ok((DemHorizontalCrs::Epsg25832Utm32N, format!("EPSG:{epsg}"))),
+            other => Err(DemError::UnsupportedCrs(format!(
+                "unsupported projected CRS EPSG:{other} (supported: EPSG:25832)"
+            ))),
+        });
+    }
+
+    if let Some(epsg) = keys.geographic_type {
+        return Some(match epsg {
+            4326 => Ok((DemHorizontalCrs::Wgs84Geographic, format!("EPSG:{epsg}"))),
+            other => Err(DemError::UnsupportedCrs(format!(
+                "unsupported geographic CRS EPSG:{other} (supported: EPSG:4326)"
+            ))),
+        });
+    }
+
+    None
+}
+
+/// Extent heuristic used only when GeoKey CRS tags are absent or incomplete.
+fn infer_horizontal_crs_from_extent(extent: &Rect) -> Result<DemHorizontalCrs, DemError> {
     if extent.min.x >= -180.0 && extent.max.x <= 180.0 && extent.min.y >= -90.0 && extent.max.y <= 90.0 {
-        DemHorizontalCrs::Wgs84Geographic
-    } else if extent.min.x >= 100_000.0
+        return Ok(DemHorizontalCrs::Wgs84Geographic);
+    }
+    if extent.min.x >= 100_000.0
         && extent.max.x <= 1_000_000.0
         && extent.min.y >= 4_000_000.0
         && extent.max.y <= 6_500_000.0
     {
-        DemHorizontalCrs::Epsg25832Utm32N
-    } else {
-        DemHorizontalCrs::Epsg25832Utm32N
+        return Ok(DemHorizontalCrs::Epsg25832Utm32N);
     }
+    Err(DemError::UnsupportedCrs(
+        "could not detect CRS from GeoTIFF tags; model extent is outside supported EPSG:4326 / EPSG:25832 heuristics".to_string(),
+    ))
 }
 
-fn infer_horizontal_crs_label(extent: &Rect) -> String {
-    match infer_horizontal_crs(extent) {
+fn horizontal_crs_label(crs: DemHorizontalCrs) -> String {
+    match crs {
         DemHorizontalCrs::Wgs84Geographic => "EPSG:4326".to_string(),
         DemHorizontalCrs::Epsg25832Utm32N => "EPSG:25832".to_string(),
     }
 }
 
-fn build_window(geo_tiff: &GeoTiffReader, center_lat: f64, center_lon: f64) -> Result<DemWindow, DemError> {
-    let crs = infer_horizontal_crs(&geo_tiff.model_extent());
+fn build_window(
+    geo_tiff: &GeoTiffReader,
+    center_lat: f64,
+    center_lon: f64,
+    crs: DemHorizontalCrs,
+    nodata: Option<f32>,
+) -> Result<DemWindow, DemError> {
     let cols = MAX_WINDOW_SAMPLES;
     let rows = MAX_WINDOW_SAMPLES;
     let half_width = DEFAULT_WINDOW_HALF_WIDTH_M;
@@ -548,7 +606,7 @@ fn build_window(geo_tiff: &GeoTiffReader, center_lat: f64, center_lon: f64) -> R
         north_northing,
         east_step,
         north_step,
-        nodata: None,
+        nodata,
         values,
     })
 }
@@ -709,12 +767,52 @@ mod tests {
     }
 
     #[test]
-    fn projected_extent_is_classified_as_epsg25832() {
+    fn projected_extent_heuristic_classifies_epsg25832() {
         let extent = Rect::new(
             Coord { x: 400_000.0, y: 5_200_000.0 },
             Coord { x: 900_000.0, y: 5_500_000.0 },
         );
-        assert_eq!(infer_horizontal_crs(&extent), DemHorizontalCrs::Epsg25832Utm32N);
-        assert_eq!(infer_horizontal_crs_label(&extent), "EPSG:25832");
+        assert_eq!(
+            infer_horizontal_crs_from_extent(&extent).expect("utm extent"),
+            DemHorizontalCrs::Epsg25832Utm32N
+        );
     }
+
+    #[test]
+    fn geokeys_prefer_projected_epsg25832_over_extent() {
+        let mut keys = GeoKeyDirectory::default();
+        keys.projected_type = Some(25832);
+        let result = detect_horizontal_crs_from_geokeys(&keys).expect("tagged").expect("ok");
+        assert_eq!(result.0, DemHorizontalCrs::Epsg25832Utm32N);
+        assert_eq!(result.1, "EPSG:25832");
+    }
+
+    #[test]
+    fn geokeys_prefer_geographic_epsg4326() {
+        let mut keys = GeoKeyDirectory::default();
+        keys.geographic_type = Some(4326);
+        let result = detect_horizontal_crs_from_geokeys(&keys).expect("tagged").expect("ok");
+        assert_eq!(result.0, DemHorizontalCrs::Wgs84Geographic);
+        assert_eq!(result.1, "EPSG:4326");
+    }
+
+    #[test]
+    fn unsupported_geokey_epsg_fails_at_detection() {
+        let mut keys = GeoKeyDirectory::default();
+        keys.projected_type = Some(32632);
+        let error = detect_horizontal_crs_from_geokeys(&keys)
+            .expect("tagged")
+            .expect_err("unsupported");
+        assert!(matches!(error, DemError::UnsupportedCrs(_)));
+    }
+
+    #[test]
+    fn unknown_extent_without_geokeys_is_unsupported() {
+        let extent = Rect::new(Coord { x: 0.0, y: 0.0 }, Coord { x: 10_000.0, y: 10_000.0 });
+        assert!(matches!(
+            infer_horizontal_crs_from_extent(&extent),
+            Err(DemError::UnsupportedCrs(_))
+        ));
+    }
+
 }
