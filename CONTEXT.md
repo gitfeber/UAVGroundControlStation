@@ -29,7 +29,7 @@ The computed ground-target position and supporting ranges/quality derived from U
 _Avoid_: GPS fix, waypoint, geotag
 
 **Terrain model**:
-The local elevation surface used for ray intersection (e.g. EPSG:25832 projected DEM). Operator-configured; desktop loads real GeoTIFF; web dev uses synthetic terrain only in v1.
+The local elevation surface used for ray intersection (e.g. EPSG:25832 projected DEM or EPSG:4326 geographic GeoTIFF). Operator-configured; desktop loads real GeoTIFF; web dev uses synthetic terrain only in v1.
 _Avoid_: Map tiles, basemap, orthophoto
 
 **Gimbal attitude**:
@@ -53,7 +53,7 @@ Which MAVLink altitude field defines the ray origin height — `amsl` (default) 
 _Avoid_: Ellipsoid height, geoid model
 
 **Altitude offset**:
-Operator-configured meters added to the ray-origin altitude so UAV height matches the terrain model vertical reference (e.g. DGM1 vs GPS AMSL). Default `0`; calibrate at a known hover point.
+Operator-configured meters added to the ray-origin altitude so UAV height matches the terrain model vertical reference (e.g. DEM vs GPS AMSL). Default `0`; calibrate at a known hover point.
 _Avoid_: Geoid correction, DEM bias slider
 
 **ENU anchor**:

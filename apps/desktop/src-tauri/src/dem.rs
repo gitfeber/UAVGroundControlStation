@@ -73,7 +73,7 @@ pub struct DemService {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DemHorizontalCrs {
     Wgs84Geographic,
-    /// ETRS89 / UTM zone 32N — EPSG:25832 projected DEM and similar projected GeoTIFFs.
+    /// ETRS89 / UTM zone 32N — EPSG:25832 projected DEM GeoTIFFs (e.g. 1 m DGM-class tiles).
     Epsg25832Utm32N,
 }
 
@@ -476,7 +476,7 @@ fn empty_metadata() -> TerrainMetadataResponse {
 }
 
 /// Prefer GeoTIFF GeoKey EPSG codes (`geotiff` 0.1 exposes `geo_key_directory`).
-/// When tags are missing, fall back to model-extent heuristics for EPSG:25832 projected DEM v1.
+/// When tags are missing, fall back to model-extent heuristics for EPSG:25832 / WGS84 tiles.
 fn detect_horizontal_crs(geo_tiff: &GeoTiffReader) -> Result<(DemHorizontalCrs, String), DemError> {
     if let Some(result) = detect_horizontal_crs_from_geokeys(&geo_tiff.geo_key_directory) {
         return result;

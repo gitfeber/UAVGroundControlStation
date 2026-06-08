@@ -159,18 +159,18 @@ Empty system ports without device metadata are hidden; unusual paths can be ente
 
 ### Ground target terrain model (desktop)
 
-Real elevation for **ground target estimation** is desktop-only (see [`docs/adr/0005-target-estimation-ts-rust-split.md`](docs/adr/0005-target-estimation-ts-rust-split.md)). Load a local GeoTIFF/DGM through the Tauri bridge; the Rust backend keeps a sliding **4 km × 4 km** window around the UAV and serves batched elevation queries for ray marching. EPSG:25832 projected DEM and other **EPSG:25832** (ETRS89 / UTM 32N) GeoTIFFs are sampled in projected meters — WGS84 UAV coordinates are transformed before lookup. Geographic **EPSG:4326** GeoTIFFs continue to use lat/lon sampling.
+Real elevation for **ground target estimation** is desktop-only (see [`docs/adr/0005-target-estimation-ts-rust-split.md`](docs/adr/0005-target-estimation-ts-rust-split.md)). Load a local GeoTIFF/DGM through the Tauri bridge; the Rust backend keeps a sliding **4 km × 4 km** window around the UAV and serves batched elevation queries for ray marching. **EPSG:25832** (ETRS89 / UTM 32N) projected GeoTIFFs — including common 1 m DGM-class tiles — are sampled in projected meters; WGS84 UAV coordinates are transformed before lookup. Geographic **EPSG:4326** GeoTIFFs continue to use lat/lon sampling.
 
 **CRS detection:** the desktop DEM loader prefers GeoTIFF **GeoKey** EPSG tags (`projected_type` / `geographic_type` via the `geotiff` 0.1 reader). When those tags are missing, it falls back to model-extent heuristics for EPSG:25832 / UTM32 and WGS84 geographic tiles. Unsupported CRS values fail at load time with a clear error instead of sampling with the wrong axis order.
 
-#### EPSG:25832 projected DEM smoke test (desktop operator)
+#### Projected DEM smoke test (desktop operator)
 
-Use a **small DGM1 GeoTIFF clipped around your flight area** (full-state tiles are large and slow to window-cache).
+Use a **small GeoTIFF clipped around your flight area** (full-state tiles are large and slow to window-cache).
 
 1. Start the desktop app with live telemetry over the flight area.
 2. **No DEM loaded** — Ground Target estimate should be **bad** with `dem_not_loaded`; map marker/LOS hidden.
-3. Load the local DGM1 path in the Ground Target card.
-4. **Metadata check** — expect **EPSG:25832** (ETRS89 / UTM zone 32N), resolution about **1 m** for DGM1, and a plausible source path.
+3. Load the local DEM path in the Ground Target card.
+4. **Metadata check** — expect **EPSG:25832** (ETRS89 / UTM zone 32N) for projected tiles, resolution about **1 m** for DGM-class data, and a plausible source path.
 5. **Valid/warn estimate** — orange map marker and dashed LOS appear when gimbal/GPS gates pass.
 6. **Bad estimate** — marker/LOS hidden; inspect reasons in the Ground Target card.
 7. If **every** sample is `dem_out_of_coverage`, the tile CRS is likely wrong, the UAV is outside the GeoTIFF extent, or the file is not EPSG:25832 / UTM32. `dem_nodata` means the raster cell is empty/NoData inside coverage.
