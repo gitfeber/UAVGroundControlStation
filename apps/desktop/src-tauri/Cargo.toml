@@ -1,10 +1,11 @@
 [package]
 name = "uav-ground-control-station"
-version = "0.2.11"
+version = "0.2.13"
 description = "Native desktop shell for UAV Ground Control Station"
 authors = ["F. Eber"]
 license = "GPL-3.0-only"
 edition = "2021"
+rust-version = "1.85"
 
 [lib]
 name = "uav_ground_control_station_lib"

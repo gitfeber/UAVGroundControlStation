@@ -12,8 +12,12 @@ import { Topbar } from "./components/Topbar";
 import { VideoPanel } from "./components/VideoPanel";
 import { ActivityLogPanel } from "./components/ActivityLogPanel";
 import { ReplaySimPanel } from "./components/ReplaySimPanel";
+import { SplashScreen } from "./components/SplashScreen";
+
+const ENABLE_SPLASH_SCREEN = import.meta.env.VITE_ENABLE_SPLASH_SCREEN !== "false";
 
 export function App() {
+  const [showSplash, setShowSplash] = useState(ENABLE_SPLASH_SCREEN);
   const {
     telemetry,
     status,
@@ -76,63 +80,66 @@ export function App() {
   );
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
-      <Topbar
-        ports={ports}
-        status={status}
-        loggingStatus={loggingStatus}
-        runtimeMode={runtimeMode}
-        wsConnected={wsConnected}
-        packetCount={telemetry.packetCount}
-        packetAge={packetAge(telemetry.lastPacketAt)}
-        activeSourceMode={activeSourceMode}
-        liveControlsLocked={liveControlsLocked}
-        liveConnectedInBackground={liveConnectedInBackground}
-        onSetSourceMode={setSourceMode}
-        onRefreshPorts={refreshPorts}
-        onConnect={(path, baudRate) => connect({ path, baudRate })}
-        onDisconnect={disconnect}
-        onReset={resetAll}
-        onStartLogging={startLogging}
-        onStopLogging={stopLogging}
-      />
-
-      {activeSourceMode !== "live" && <NonLiveBanner mode={activeSourceMode} />}
-
-      <div className={`relative flex min-h-0 flex-1 ${dashboardTint(activeSourceMode)}`}>
-        <TelemetrySidebar
-          telemetry={telemetry}
-          distanceFromHome={distanceFromHome}
-          alerts={alerts}
-          preflight={preflight}
-          targetEstimation={targetEstimation}
+    <>
+      <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
+        <Topbar
+          ports={ports}
+          status={status}
+          loggingStatus={loggingStatus}
+          runtimeMode={runtimeMode}
+          wsConnected={wsConnected}
+          packetCount={telemetry.packetCount}
+          packetAge={packetAge(telemetry.lastPacketAt)}
+          activeSourceMode={activeSourceMode}
+          liveControlsLocked={liveControlsLocked}
+          liveConnectedInBackground={liveConnectedInBackground}
+          onSetSourceMode={setSourceMode}
+          onRefreshPorts={refreshPorts}
+          onConnect={(path, baudRate) => connect({ path, baudRate })}
+          onDisconnect={disconnect}
+          onReset={resetAll}
+          onStartLogging={startLogging}
+          onStopLogging={stopLogging}
         />
-        <ErrorBoundary>
-          <MapPanel
+
+        {activeSourceMode !== "live" && <NonLiveBanner mode={activeSourceMode} />}
+
+        <div className={`relative flex min-h-0 flex-1 ${dashboardTint(activeSourceMode)}`}>
+          <TelemetrySidebar
             telemetry={telemetry}
-            coordinate={coordinate}
-            home={home}
-            groundTarget={targetEstimation.estimate}
-            trackMode={isControlledTrack ? "controlled" : "internal"}
-            controlledTrack={replay.replayTrack}
+            distanceFromHome={distanceFromHome}
+            alerts={alerts}
+            preflight={preflight}
+            targetEstimation={targetEstimation}
           />
-        </ErrorBoundary>
-        <ActivityLogPanel logs={logs} messages={status.mavlinkMessages ?? []} onClear={clearLogs} />
-        <VideoPanel estimate={targetEstimation.estimate} />
+          <ErrorBoundary>
+            <MapPanel
+              telemetry={telemetry}
+              coordinate={coordinate}
+              home={home}
+              groundTarget={targetEstimation.estimate}
+              trackMode={isControlledTrack ? "controlled" : "internal"}
+              controlledTrack={replay.replayTrack}
+            />
+          </ErrorBoundary>
+          <ActivityLogPanel logs={logs} messages={status.mavlinkMessages ?? []} onClear={clearLogs} />
+          <VideoPanel estimate={targetEstimation.estimate} />
 
-        {activeSourceMode !== "live" && (
-          <div className="absolute right-4 top-4 z-20">
-            <ReplaySimPanel mode={activeSourceMode} replay={replay} />
-          </div>
-        )}
+          {activeSourceMode !== "live" && (
+            <div className="absolute right-4 top-4 z-20">
+              <ReplaySimPanel mode={activeSourceMode} replay={replay} />
+            </div>
+          )}
 
-        {error && (
-          <div className="absolute left-1/2 top-4 z-30 -translate-x-1/2 rounded-lg border border-red-400/30 bg-red-950/90 px-4 py-2 text-sm text-red-100 shadow-glow">
-            {error}
-          </div>
-        )}
+          {error && (
+            <div className="absolute left-1/2 top-4 z-30 -translate-x-1/2 rounded-lg border border-red-400/30 bg-red-950/90 px-4 py-2 text-sm text-red-100 shadow-glow">
+              {error}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+      {showSplash && <SplashScreen onDone={() => setShowSplash(false)} />}
+    </>
   );
 }
 

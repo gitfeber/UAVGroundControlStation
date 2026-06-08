@@ -74,7 +74,7 @@ Domain language and terms: [`CONTEXT.md`](CONTEXT.md).
 
 - **Node.js** ≥ 20.19
 - **pnpm** 10.x (`corepack enable` recommended)
-- **Desktop build:** [Rust](https://www.rust-lang.org/tools/install) and [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/)
+- **Desktop build:** [Rust](https://www.rust-lang.org/tools/install) **≥ 1.85** (stable; `rustup update stable`) and [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/). Older Cargo versions fail on `Cargo.lock` v4 and current crate dependencies — see [`apps/desktop/src-tauri/rust-toolchain.toml`](apps/desktop/src-tauri/rust-toolchain.toml).
 - **Windows:** run maintenance commands (`pnpm install`, `lint`, `typecheck`) in **WSL**; run **Tauri dev/build** for real `COM*` hardware in **Windows PowerShell**
 
 ## Quick start
@@ -205,6 +205,7 @@ On the **desktop** link, gimbal attitude for estimation comes from MAVLink **285
 | `VITE_MAP_STYLE_URL` | Optional: full MapLibre style URL |
 | `VITE_SATELLITE_TILE_URL` | Optional: raster satellite tile URL |
 | `VITE_VIDEO_URL` / `VITE_VIDEO_KIND` | Optional: camera stream (e.g. MJPEG) |
+| `VITE_ENABLE_SPLASH_SCREEN` | Startup HUD splash overlay (default: enabled; set `false` to skip) |
 
 Server: `PORT` (default `3001`), `HOST` (default `127.0.0.1`) in `apps/server`. The server exposes **unauthenticated** serial-control endpoints; it binds loopback only. Setting `HOST` to a routable address (e.g. `0.0.0.0`) is a deliberate opt-in that lets any device on the network open or close the link to flight hardware — see [`docs/adr/0002-server-loopback-only.md`](docs/adr/0002-server-loopback-only.md).
 
