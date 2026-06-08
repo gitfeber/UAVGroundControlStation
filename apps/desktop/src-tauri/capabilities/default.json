@@ -3,5 +3,5 @@
   "identifier": "main-capability",
   "description": "Bundled UAV Ground Control Station UI and native serial bridge",
   "windows": ["*"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "dialog:default"]
 }

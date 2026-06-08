@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Feature, FeatureCollection, LineString, Point } from "geojson";
-import type { TelemetryState } from "@uav-ground-control-station/shared";
+import type { TelemetryState, TargetEstimate } from "@uav-ground-control-station/shared";
 import type { Coordinate } from "../lib/geo";
 import { isValidLngLat, toMapLngLat } from "../lib/geo";
 import { resolveHeadingDeg } from "../lib/resolveHeadingDeg";
@@ -11,6 +11,7 @@ interface MapPanelProps {
   telemetry: TelemetryState;
   coordinate: Coordinate | null;
   home: Coordinate | null;
+  groundTarget?: TargetEstimate | null;
   /**
    * Replay/simulation controlled track. When `trackMode` is "controlled" the
    * map renders exactly this array and never appends internally (ADR 0003 §5).
@@ -24,7 +25,7 @@ type PointCollection = FeatureCollection<Point, Record<string, never>>;
 
 const fallbackCenter: [number, number] = [10.4515, 51.1657];
 
-export function MapPanel({ telemetry, coordinate, home, controlledTrack, trackMode = "internal" }: MapPanelProps) {
+export function MapPanel({ telemetry, coordinate, home, groundTarget, controlledTrack, trackMode = "internal" }: MapPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<import("maplibre-gl").Map | null>(null);
   const maplibreRef = useRef<typeof import("maplibre-gl") | null>(null);
@@ -108,6 +109,32 @@ export function MapPanel({ telemetry, coordinate, home, controlledTrack, trackMo
           }
         });
 
+        map.addSource("ground-target-los", { type: "geojson", data: emptyLineFeature() });
+        map.addLayer({
+          id: "ground-target-los-line",
+          type: "line",
+          source: "ground-target-los",
+          paint: {
+            "line-color": "#f97316",
+            "line-width": 2,
+            "line-opacity": 0.85,
+            "line-dasharray": [2, 2]
+          }
+        });
+
+        map.addSource("ground-target", { type: "geojson", data: emptyPointCollection() });
+        map.addLayer({
+          id: "ground-target-point",
+          type: "circle",
+          source: "ground-target",
+          paint: {
+            "circle-radius": 8,
+            "circle-color": "#f97316",
+            "circle-stroke-width": 2,
+            "circle-stroke-color": "#0f172a"
+          }
+        });
+
         setMapReady(true);
       });
     };
@@ -167,6 +194,36 @@ export function MapPanel({ telemetry, coordinate, home, controlledTrack, trackMo
     const source = map.getSource("home") as import("maplibre-gl").GeoJSONSource | undefined;
     source?.setData(pointCollection(homeLngLat));
   }, [homeLngLat, mapReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+
+    const showTarget =
+      groundTarget &&
+      (groundTarget.valid || groundTarget.quality === "warn") &&
+      groundTarget.lat !== null &&
+      groundTarget.lon !== null;
+
+    const targetSource = map.getSource("ground-target") as import("maplibre-gl").GeoJSONSource | undefined;
+    const losSource = map.getSource("ground-target-los") as import("maplibre-gl").GeoJSONSource | undefined;
+
+    if (!showTarget || !droneLngLat) {
+      targetSource?.setData(emptyPointCollection());
+      losSource?.setData(emptyLineFeature());
+      return;
+    }
+
+    const targetLngLat = toMapLngLat({ lat: groundTarget.lat!, lon: groundTarget.lon! });
+    if (!targetLngLat) {
+      targetSource?.setData(emptyPointCollection());
+      losSource?.setData(emptyLineFeature());
+      return;
+    }
+
+    targetSource?.setData(pointCollection(targetLngLat));
+    losSource?.setData(lineFeature(droneLngLat, targetLngLat));
+  }, [groundTarget, droneLngLat, mapReady]);
 
   return (
     <main className="relative min-w-0 flex-1">
@@ -248,5 +305,29 @@ function emptyPointCollection(): PointCollection {
   return {
     type: "FeatureCollection",
     features: []
+  };
+}
+
+type LineFeature = Feature<LineString, Record<string, never>>;
+
+function emptyLineFeature(): LineFeature {
+  return {
+    type: "Feature",
+    properties: {},
+    geometry: {
+      type: "LineString",
+      coordinates: []
+    }
+  };
+}
+
+function lineFeature(from: [number, number], to: [number, number]): LineFeature {
+  return {
+    type: "Feature",
+    properties: {},
+    geometry: {
+      type: "LineString",
+      coordinates: [from, to]
+    }
   };
 }

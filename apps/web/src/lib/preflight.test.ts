@@ -9,6 +9,7 @@ function goodTelemetry(overrides: DeepOverrides = {}): TelemetryState {
   const base: TelemetryState = {
     connected: true,
     lastPacketAt: NOW - 500,
+    sampledAtMs: NOW - 500,
     packetCount: 42,
     vehicle: {
       systemId: 1,
@@ -32,7 +33,8 @@ function goodTelemetry(overrides: DeepOverrides = {}): TelemetryState {
       minRssi: 110,
       warningCount: 0,
       sessionStartedAt: NOW - 10000
-    }
+    },
+    gimbal: null
   };
   return mergeDeep(base, overrides);
 }

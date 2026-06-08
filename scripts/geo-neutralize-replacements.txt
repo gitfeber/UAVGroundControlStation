@@ -1,0 +1,12 @@
+# Historical note: feat/ground-target-estimation branch history was rewritten with
+# git-filter-repo (2026-06) to remove region-specific test fixtures and docs.
+#
+# Replacement rules are not checked in verbatim (they contained the old tokens).
+# Backup of pre-rewrite tip: branch backup/feat-ground-target-estimation
+#
+# Re-run template (generate a fresh literal:old==>new map locally if needed):
+#   git filter-repo --force --refs <branch> \
+#     --replace-text <your-replacements.txt> \
+#     --replace-message scripts/geo-neutralize-message-replacements.txt
+#
+# Avoid broad patterns like bare "lon: 11," — they can break unrelated test endpoints.

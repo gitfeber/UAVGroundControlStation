@@ -5,6 +5,8 @@ import { elapsedTime, formatInteger, formatNumber, percentageColor } from "../li
 import { sensorHealthSummary } from "../lib/sensorHealth";
 import { defaultSidebarOrder, loadSidebarOrder, saveSidebarOrder, type SidebarCardId } from "../lib/sidebarCardOrder";
 import type { PreflightHealth } from "../lib/preflight";
+import type { TargetEstimationController } from "../hooks/useTargetEstimation";
+import { GroundTargetPanel } from "./GroundTargetPanel";
 import { Badge, Metric, Panel } from "./Panel";
 import { PreflightHealthCard } from "./PreflightHealthCard";
 import type { SidebarDragHandlers } from "./SidebarSortableList";
@@ -20,9 +22,10 @@ interface TelemetrySidebarProps {
   distanceFromHome: number | null;
   alerts: AlertItem[];
   preflight: PreflightHealth;
+  targetEstimation: TargetEstimationController;
 }
 
-export function TelemetrySidebar({ telemetry, distanceFromHome, alerts, preflight }: TelemetrySidebarProps) {
+export function TelemetrySidebar({ telemetry, distanceFromHome, alerts, preflight, targetEstimation }: TelemetrySidebarProps) {
   const [view, setView] = useState<SidebarView>(() => readSidebarView());
   const [cardOrder, setCardOrder] = useState<SidebarCardId[]>(() => loadSidebarOrder());
   const batteryPercent = telemetry.battery.remainingPercent;
@@ -82,7 +85,7 @@ export function TelemetrySidebar({ telemetry, distanceFromHome, alerts, prefligh
           mode="text"
           order={cardOrder}
           onOrderChange={setCardOrder}
-          renderCard={(id, drag) => renderTextCard(id, { telemetry, distanceFromHome, batteryPercent, sensorSummary }, drag)}
+          renderCard={(id, drag) => renderTextCard(id, { telemetry, distanceFromHome, batteryPercent, sensorSummary, targetEstimation }, drag)}
         />
       )}
     </aside>
@@ -94,13 +97,23 @@ interface TextRenderContext {
   distanceFromHome: number | null;
   batteryPercent: number | null;
   sensorSummary: string;
+  targetEstimation: TargetEstimationController;
 }
 
 function renderTextCard(id: SidebarCardId, ctx: TextRenderContext, drag: SidebarDragHandlers) {
-  const { telemetry, distanceFromHome, batteryPercent, sensorSummary } = ctx;
+  const { telemetry, distanceFromHome, batteryPercent, sensorSummary, targetEstimation } = ctx;
   const sortable = { sortable: true as const, onDragStart: drag.onDragStart, onDragEnd: drag.onDragEnd };
 
   switch (id) {
+    case "groundTarget":
+      return (
+        <GroundTargetPanel
+          {...targetEstimation}
+          sortable
+          onDragStart={drag.onDragStart}
+          onDragEnd={drag.onDragEnd}
+        />
+      );
     case "vehicle":
       return (
         <Panel title="Vehicle" {...sortable}>

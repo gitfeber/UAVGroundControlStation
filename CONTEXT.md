@@ -18,6 +18,72 @@ _Avoid_: App mode, client type
 A serial session where CRSF frames are detected first; MAVLink may arrive only inside CRSF passthrough frames (typical TX16S telem mirror at 420000 baud).
 _Avoid_: CRSF mode toggle
 
+### Target estimation
+
+**Ground target**:
+The point on the terrain surface where the camera optical axis meets the ground — for v1, always the center of the live video image.
+_Avoid_: Detected object, pixel target, POI
+
+**Target estimate**:
+The computed ground-target position and supporting ranges/quality derived from UAV pose, gimbal attitude, and local terrain elevation — not a sensor measurement.
+_Avoid_: GPS fix, waypoint, geotag
+
+**Terrain model**:
+The local elevation surface used for ray intersection (e.g. EPSG:25832 projected DEM or EPSG:4326 geographic GeoTIFF). Operator-configured; desktop loads real GeoTIFF; web dev uses synthetic terrain only in v1.
+_Avoid_: Map tiles, basemap, orthophoto
+
+**Gimbal attitude**:
+The camera/gimbal orientation used for target-estimation ray construction, normalized from MAVLink with source priority `285 → 265 → body-fixed vehicle attitude`. Not shown as a separate operator instrument in v1.
+_Avoid_: Mount status, gimbal manager state
+
+**Camera configuration**:
+Operator settings for ray construction — mount offsets, frame conventions (earth/body, pitch sign, yaw reference), calibration offsets, and whether a body-fixed camera is allowed when gimbal telemetry is absent.
+_Avoid_: Video URL, stream settings
+
+**Telemetry sample time**:
+Monotonic `sampledAtMs` on each telemetry snapshot — the estimator's time base for latency-aware buffer lookup. Distinct from `lastPacketAt` (any packet on the link).
+_Avoid_: Frame timestamp, video clock
+
+**Video latency offset**:
+Operator-configured milliseconds subtracted from the estimate tick time (`atPcTimeMs`) so telemetry aligns with delayed video. Tunable; not a measured stream property in v1.
+_Avoid_: Buffer delay, sync offset
+
+**Altitude mode**:
+Which MAVLink altitude field defines the ray origin height — `amsl` (default) or `relative` (fallback when AMSL absent). Paired with an operator **altitude offset** to align UAV height with the terrain model's vertical datum.
+_Avoid_: Ellipsoid height, geoid model
+
+**Altitude offset**:
+Operator-configured meters added to the ray-origin altitude so UAV height matches the terrain model vertical reference (e.g. DEM vs GPS AMSL). Default `0`; calibrate at a known hover point.
+_Avoid_: Geoid correction, DEM bias slider
+
+**ENU anchor**:
+The WGS84 lat/lon origin for a single target estimate's local East-North-Up frame — the interpolated UAV position at the latency-corrected telemetry time. Recomputed each estimate, not the home reference.
+_Avoid_: Home reference, session origin, DEM tile corner
+
+**Terrain window**:
+The locally loaded subset of the terrain model kept in memory around the UAV for elevation queries. Recenters as the aircraft moves; distinct from the full terrain model file extent.
+_Avoid_: Map viewport, tile cache layer
+
+**Target estimate quality**:
+Operator-facing trust level for a ground-target estimate — `good`, `warn`, or `bad` — derived deterministically from telemetry, gimbal source, DEM, and geometry gates. A `bad` gate invalidates the estimate; `warn` still shows coordinates when math allows.
+_Avoid_: Confidence score, accuracy percentage
+
+**Estimate invalid reason**:
+Short machine reason on a failed or degraded target estimate (e.g. `gimbal_unavailable`, `dem_not_loaded`, `dem_out_of_coverage`, `gps_few_satellites`) so the operator knows what to fix. Bad gates invalidate the estimate; warn gates (`using_relative_altitude_fallback`, `gimbal_body_fixed_fallback`, `gimbal_mount_orientation`, `telemetry_stale`, `gps_low_accuracy`) still show coordinates when math allows.
+_Avoid_: Error code, status message
+
+**Ground target panel**:
+Sidebar operator surface for full ground-target readout, terrain-model configuration, and estimation settings. Complements the compact readout on the camera feed.
+_Avoid_: Target tab, geolocation settings
+
+**Target estimation session**:
+The live-only estimation runtime that owns the telemetry buffer, latency lookup, and repeated ground-target computation. Active in `live` source mode only in v1.
+_Avoid_: Estimator service, raycast engine
+
+**Target sample log**:
+Short in-memory history of recent ground-target estimates for operator export and offline validation — not the replay log and not continuous disk logging in v1.
+_Avoid_: Flight log, estimation recording
+
 ### Protocol and data
 
 **Frame**:

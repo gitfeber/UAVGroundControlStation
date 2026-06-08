@@ -75,9 +75,15 @@ importers:
       '@tauri-apps/api':
         specifier: latest
         version: 2.11.0
+      '@tauri-apps/plugin-dialog':
+        specifier: latest
+        version: 2.7.1
       '@uav-ground-control-station/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@uav-ground-control-station/target-estimation':
+        specifier: workspace:*
+        version: link:../../packages/target-estimation
       '@vitejs/plugin-react':
         specifier: latest
         version: 6.0.2(vite@8.0.13(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3))
@@ -120,6 +126,16 @@ importers:
         version: 4.1.8(@types/node@25.9.1)(vite@8.0.13(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3))
 
   packages/shared: {}
+
+  packages/target-estimation:
+    dependencies:
+      '@uav-ground-control-station/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      vitest:
+        specifier: latest
+        version: 4.1.8(@types/node@25.9.1)(vite@8.0.13(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3))
 
 packages:
 
@@ -868,6 +884,9 @@ packages:
     resolution: {integrity: sha512-bk3HemqvGRoy+5D/dVMUQHKMYLglD0jVnMm/0iGMH6ufZ+p8r14m6BpIixwij3PBvZdvORUp1YifTD8QxVZ1Nw==}
     engines: {node: '>= 10'}
     hasBin: true
+
+  '@tauri-apps/plugin-dialog@2.7.1':
+    resolution: {integrity: sha512-OK1UBXYt+ojcmxMktzzuyonYIFta8CmAASpX+CA+DTGK24KlHjhYI6x2iOJ/TjZF4N7/ACK1oFmEOjIY9IhzOQ==}
 
   '@tsconfig/node10@1.0.12':
     resolution: {integrity: sha512-UCYBaeFvM11aU2y3YPZ//O5Rhj+xKyzy7mvcIoAjASbigy8mHMryP5cK7dgjlz2hWxh1g5pLw084E0a/wlUSFQ==}
@@ -2778,6 +2797,10 @@ snapshots:
       '@tauri-apps/cli-win32-arm64-msvc': 2.11.2
       '@tauri-apps/cli-win32-ia32-msvc': 2.11.2
       '@tauri-apps/cli-win32-x64-msvc': 2.11.2
+
+  '@tauri-apps/plugin-dialog@2.7.1':
+    dependencies:
+      '@tauri-apps/api': 2.11.0
 
   '@tsconfig/node10@1.0.12': {}
 

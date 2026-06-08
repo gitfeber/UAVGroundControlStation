@@ -4,6 +4,7 @@ export function createEmptyTelemetryState(): TelemetryState {
   return {
     connected: false,
     lastPacketAt: null,
+    sampledAtMs: null,
     packetCount: 0,
     vehicle: {
       systemId: null,
@@ -63,7 +64,8 @@ export function createEmptyTelemetryState(): TelemetryState {
       minRssi: null,
       warningCount: 0,
       sessionStartedAt: Date.now()
-    }
+    },
+    gimbal: null
   };
 }
 
@@ -89,6 +91,7 @@ export function normalizeTelemetryState(input: TelemetryState | null | undefined
       ...candidate.system,
       statusText: Array.isArray(candidate.system?.statusText) ? candidate.system.statusText : []
     },
-    stats: { ...fallback.stats, ...candidate.stats }
+    stats: { ...fallback.stats, ...candidate.stats },
+    gimbal: candidate.gimbal ?? null
   };
 }
