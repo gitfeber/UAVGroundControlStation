@@ -3,6 +3,8 @@
 use geo_types::{Coord, Rect};
 use geotiff::{GeoKeyDirectory, GeoTiff};
 use serde::{Deserialize, Serialize};
+use tiff::decoder::Decoder;
+use tiff::tags::Tag;
 use std::{
     fs::File,
     io::{BufReader, Read, Seek},
@@ -144,6 +146,7 @@ impl DemService {
             return Err(DemError::Io(format!("terrain model not found: {trimmed}")));
         }
 
+        let band_nodata = read_gdal_nodata(&source_path)?;
         let file = File::open(&source_path).map_err(|error| DemError::Io(error.to_string()))?;
         let reader = BufReader::new(file);
         let geo_tiff = GeoTiff::read(reader).map_err(|error| DemError::GeoTiff(error.to_string()))?;
@@ -155,7 +158,7 @@ impl DemService {
         self.geo_tiff = Some(geo_tiff);
         self.window = None;
         self.horizontal_crs = Some(crs);
-        self.band_nodata = None;
+        self.band_nodata = band_nodata;
         self.metadata = TerrainMetadataResponse {
             vertical_datum: "geotiff-band-0".to_string(),
             horizontal_crs,
@@ -532,6 +535,36 @@ fn horizontal_crs_label(crs: DemHorizontalCrs) -> String {
     }
 }
 
+const GDAL_NODATA_TAG: Tag = Tag::Unknown(42113);
+
+/// `geotiff` 0.1 does not surface band NoData; read the GDAL ASCII tag directly.
+fn read_gdal_nodata(path: &PathBuf) -> Result<Option<f32>, DemError> {
+    let file = File::open(path).map_err(|error| DemError::Io(error.to_string()))?;
+    let mut decoder =
+        Decoder::new(BufReader::new(file)).map_err(|error| DemError::GeoTiff(error.to_string()))?;
+    let Some(value) = decoder
+        .find_tag(GDAL_NODATA_TAG)
+        .map_err(|error| DemError::GeoTiff(error.to_string()))?
+    else {
+        return Ok(None);
+    };
+    let text = value
+        .into_string()
+        .map_err(|error| DemError::GeoTiff(error.to_string()))?;
+    parse_gdal_nodata_value(&text)
+}
+
+fn parse_gdal_nodata_value(text: &str) -> Result<Option<f32>, DemError> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    trimmed
+        .parse::<f64>()
+        .map(|value| Some(value as f32))
+        .map_err(|_| DemError::GeoTiff(format!("invalid GDAL nodata value: {text}")))
+}
+
 fn build_window(
     geo_tiff: &GeoTiffReader,
     center_lat: f64,
@@ -815,4 +848,39 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn parses_gdal_nodata_ascii_tag() {
+        assert_eq!(
+            parse_gdal_nodata_value("-9999").expect("parse"),
+            Some(-9999.0_f32)
+        );
+    }
+
+    #[test]
+    fn nodata_corners_surface_as_nodata_not_coverage() {
+        let window = DemWindow {
+            crs: DemHorizontalCrs::Wgs84Geographic,
+            center_lat: 50.0,
+            center_lon: 10.0,
+            west_lon: 10.0,
+            north_lat: 50.0001,
+            cols: 2,
+            rows: 2,
+            lon_step: 0.0001,
+            lat_step: 0.0001,
+            west_easting: 0.0,
+            north_northing: 0.0,
+            east_step: 0.0,
+            north_step: 0.0,
+            nodata: Some(-9999.0),
+            values: vec![100.0, -9999.0, 100.0, 100.0],
+        };
+        // Bilinear patch includes a -9999 corner -> dem_nodata, not dem_out_of_coverage.
+        assert!(window.sample_geographic(50.0, 10.00005).is_none());
+        assert_eq!(dem_failure_reason(&DemError::NoData), Some("dem_nodata".to_string()));
+        assert_eq!(
+            dem_failure_reason(&DemError::OutOfCoverage),
+            Some("dem_out_of_coverage".to_string())
+        );
+    }
 }
