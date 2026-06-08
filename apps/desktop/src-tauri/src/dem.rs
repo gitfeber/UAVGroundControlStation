@@ -7,7 +7,7 @@ use tiff::decoder::Decoder;
 use tiff::tags::Tag;
 use std::{
     fs::File,
-    io::{BufReader, Read, Seek},
+    io::BufReader,
     path::PathBuf,
 };
 
@@ -513,13 +513,13 @@ fn detect_horizontal_crs_from_geokeys(
 
 /// Extent heuristic used only when GeoKey CRS tags are absent or incomplete.
 fn infer_horizontal_crs_from_extent(extent: &Rect) -> Result<DemHorizontalCrs, DemError> {
-    if extent.min.x >= -180.0 && extent.max.x <= 180.0 && extent.min.y >= -90.0 && extent.max.y <= 90.0 {
+    if extent.min().x >= -180.0 && extent.max().x <= 180.0 && extent.min().y >= -90.0 && extent.max().y <= 90.0 {
         return Ok(DemHorizontalCrs::Wgs84Geographic);
     }
-    if extent.min.x >= 100_000.0
-        && extent.max.x <= 1_000_000.0
-        && extent.min.y >= 4_000_000.0
-        && extent.max.y <= 6_500_000.0
+    if extent.min().x >= 100_000.0
+        && extent.max().x <= 1_000_000.0
+        && extent.min().y >= 4_000_000.0
+        && extent.max().y <= 6_500_000.0
     {
         return Ok(DemHorizontalCrs::Epsg25832Utm32N);
     }
@@ -676,18 +676,18 @@ fn estimate_resolution_for_raster(
 
     match crs {
         DemHorizontalCrs::Epsg25832Utm32N => {
-            let width_m = (extent.max.x - extent.min.x).abs();
-            let height_m = (extent.max.y - extent.min.y).abs();
+            let width_m = (extent.max().x - extent.min().x).abs();
+            let height_m = (extent.max().y - extent.min().y).abs();
             let res_x = width_m / raster_width as f64;
             let res_y = height_m / raster_height as f64;
             res_x.max(res_y)
         }
         DemHorizontalCrs::Wgs84Geographic => {
-            let lon_span = (extent.max.x - extent.min.x).abs();
-            let lat_span = (extent.max.y - extent.min.y).abs();
+            let lon_span = (extent.max().x - extent.min().x).abs();
+            let lat_span = (extent.max().y - extent.min().y).abs();
             let lon_res = lon_span / raster_width as f64;
             let lat_res = lat_span / raster_height as f64;
-            let mid_lat = (extent.max.y + extent.min.y) * 0.5;
+            let mid_lat = (extent.max().y + extent.min().y) * 0.5;
             ((lon_res * meters_per_degree_lon(mid_lat)).abs()
                 + (lat_res * meters_per_degree_lat(mid_lat)).abs())
                 * 0.5
