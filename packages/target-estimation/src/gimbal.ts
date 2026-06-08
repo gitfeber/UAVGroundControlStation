@@ -1,4 +1,4 @@
-import type { CameraConfig, GimbalAttitudeSource, GimbalState, TelemetryState } from "@uav-ground-control-station/shared";
+import type { CameraConfig, GimbalAttitudeSource, TelemetryState } from "@uav-ground-control-station/shared";
 import { degToRad } from "./geo.js";
 
 export interface ResolvedGimbalAttitude {

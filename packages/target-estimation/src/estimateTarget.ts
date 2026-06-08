@@ -69,7 +69,7 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
   if (!isDemLoaded(terrain)) {
     reasons.push("dem_not_loaded");
     estimate.reasons = reasons;
-    return finalizeEstimate(estimate, reasons, null);
+    return finalizeEstimate(estimate, reasons);
   }
 
   const lat = telemetry.position.lat;
@@ -77,7 +77,7 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
   if (lat === null || lon === null) {
     reasons.push("telemetry_incomplete");
     estimate.reasons = reasons;
-    return finalizeEstimate(estimate, reasons, null);
+    return finalizeEstimate(estimate, reasons);
   }
 
   estimate.uavLat = lat;
@@ -89,7 +89,7 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
   if (!anchorPrep.ok) {
     reasons.push(anchorPrep.reason);
     estimate.reasons = reasons;
-    return finalizeEstimate(estimate, reasons, null);
+    return finalizeEstimate(estimate, reasons);
   }
 
   if ((telemetry.gps.fixType ?? 0) < 3) {
@@ -102,7 +102,7 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
   if (!gimbal) {
     reasons.push("gimbal_unavailable");
     estimate.reasons = reasons;
-    return finalizeEstimate(estimate, reasons, gimbal);
+    return finalizeEstimate(estimate, reasons);
   }
 
   estimate.gimbalSource = gimbal.source;
@@ -131,7 +131,7 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
   if (rayOriginAltMsl === null) {
     reasons.push("telemetry_incomplete");
     estimate.reasons = reasons;
-    return finalizeEstimate(estimate, reasons, gimbal);
+    return finalizeEstimate(estimate, reasons);
   }
 
   estimate.uavAltM = rayOriginAltMsl;
@@ -155,7 +155,7 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
   if (!intersection.ok) {
     reasons.push(intersection.reason);
     estimate.reasons = reasons;
-    return finalizeEstimate(estimate, reasons, gimbal);
+    return finalizeEstimate(estimate, reasons);
   }
 
   const { hitEnu, slantRangeM, terrainElevationM } = intersection.hit;
@@ -168,13 +168,12 @@ export async function estimateTargetFromTelemetry(input: EstimateTargetInput): P
   estimate.groundRangeM = Math.hypot(hitEnu[0], hitEnu[1]);
   estimate.reasons = reasons;
 
-  return finalizeEstimate(estimate, reasons, gimbal);
+  return finalizeEstimate(estimate, reasons);
 }
 
 function finalizeEstimate(
   estimate: TargetEstimate,
-  reasons: TargetEstimateInvalidReason[],
-  _gimbal: ReturnType<typeof resolveGimbalAttitude>
+  reasons: TargetEstimateInvalidReason[]
 ): TargetEstimate {
   const hasCoordinates = estimate.lat !== null && estimate.lon !== null;
   const { quality, valid } = aggregateTargetQuality(reasons, hasCoordinates);
