@@ -205,6 +205,7 @@ On the **desktop** link, gimbal attitude for estimation comes from MAVLink **285
 | `VITE_MAP_STYLE_URL` | Optional: full MapLibre style URL |
 | `VITE_SATELLITE_TILE_URL` | Optional: raster satellite tile URL |
 | `VITE_VIDEO_URL` / `VITE_VIDEO_KIND` | Optional: camera stream (e.g. MJPEG) |
+| `VITE_ENABLE_SPLASH_SCREEN` | Startup HUD splash overlay (default: enabled; set `false` to skip) |
 
 Server: `PORT` (default `3001`), `HOST` (default `127.0.0.1`) in `apps/server`. The server exposes **unauthenticated** serial-control endpoints; it binds loopback only. Setting `HOST` to a routable address (e.g. `0.0.0.0`) is a deliberate opt-in that lets any device on the network open or close the link to flight hardware — see [`docs/adr/0002-server-loopback-only.md`](docs/adr/0002-server-loopback-only.md).
 
