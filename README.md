@@ -159,7 +159,7 @@ Empty system ports without device metadata are hidden; unusual paths can be ente
 
 ### Ground target terrain model (desktop)
 
-Real elevation for **ground target estimation** is desktop-only (see [`docs/adr/0005-target-estimation-ts-rust-split.md`](docs/adr/0005-target-estimation-ts-rust-split.md)). Load a local GeoTIFF/DGM through the Tauri bridge; the Rust backend keeps a sliding **4 km × 4 km** window around the UAV and serves batched elevation queries for ray marching. **EPSG:25832** (ETRS89 / UTM 32N) projected GeoTIFFs — including common 1 m DGM-class tiles — are sampled in projected meters; WGS84 UAV coordinates are transformed before lookup. Geographic **EPSG:4326** GeoTIFFs continue to use lat/lon sampling.
+Real elevation for **ground target estimation** is desktop-only (see [`docs/adr/0005-target-estimation-ts-rust-split.md`](docs/adr/0005-target-estimation-ts-rust-split.md)). Use **Browse…** in the Ground Target card to pick a local GeoTIFF/DGM, or paste a path manually; the Rust backend keeps a sliding **4 km × 4 km** window around the UAV and serves batched elevation queries for ray marching. **EPSG:25832** (ETRS89 / UTM 32N) projected GeoTIFFs — including common 1 m DGM-class tiles — are sampled in projected meters; WGS84 UAV coordinates are transformed before lookup. Geographic **EPSG:4326** GeoTIFFs continue to use lat/lon sampling.
 
 **CRS detection:** the desktop DEM loader prefers GeoTIFF **GeoKey** EPSG tags (`projected_type` / `geographic_type` via the `geotiff` 0.1 reader). When those tags are missing, it falls back to model-extent heuristics for EPSG:25832 / UTM32 and WGS84 geographic tiles. Unsupported CRS values fail at load time with a clear error instead of sampling with the wrong axis order.
 
@@ -169,12 +169,12 @@ Use a **small GeoTIFF clipped around your flight area** (full-state tiles are la
 
 1. Start the desktop app with live telemetry over the flight area.
 2. **No DEM loaded** — Ground Target estimate should be **bad** with `dem_not_loaded`; map marker/LOS hidden.
-3. Load the local DEM path in the Ground Target card.
+3. **Browse…** or paste a DEM path in the Ground Target card, then confirm metadata loads.
 4. **Metadata check** — expect **EPSG:25832** (ETRS89 / UTM zone 32N) for projected tiles, resolution about **1 m** for DGM-class data, and a plausible source path.
 5. **Valid/warn estimate** — orange map marker and dashed LOS appear when gimbal/GPS gates pass.
 6. **Bad estimate** — marker/LOS hidden; inspect reasons in the Ground Target card.
 7. If **every** sample is `dem_out_of_coverage`, the tile CRS is likely wrong, the UAV is outside the GeoTIFF extent, or the file is not EPSG:25832 / UTM32. `dem_nodata` means the raster cell is empty/NoData inside coverage.
-8. Calibration, terrain path, and sample-log JSON/CSV export should persist across reload (`localStorage` + in-memory log).
+8. Calibration, terrain path, and sample-log JSON/CSV export should persist across reload (`localStorage` + in-memory log). Desktop **Save JSON…** / **Save CSV…** use native file dialogs.
 
 | Tauri command | Purpose |
 |---------------|---------|
@@ -190,9 +190,9 @@ Frontend wrapper: [`apps/web/src/lib/tauriDemTerrain.ts`](apps/web/src/lib/tauri
 
 ### Ground target estimation (live)
 
-Ground target estimation (image center) runs in **live** mode only. Use the sortable **Ground Target** sidebar card for full readout and settings (`localStorage` keys `uav-gcs.target.*`, including video latency, altitude mode/offset, gimbal calibration offsets, raycast range/step/min-down-angle, and stale-telemetry threshold). The camera panel shows a crosshair plus compact lat/lon, slant range, and quality. Valid or warn estimates also draw an orange map marker and dashed line-of-sight from the UAV; **bad** estimates hide the marker/LOS. Desktop requires a loaded DEM — missing terrain surfaces `dem_not_loaded` instead of silently using flat terrain. Browser dev uses synthetic flat terrain only. The sidebar also keeps an in-memory **target sample log** (600 samples) with manual JSON/CSV export; desktop can optionally save via `save_target_log`.
+Ground target estimation (image center) runs in **live** mode only. Use the sortable **Ground Target** sidebar card for full readout and settings (`localStorage` keys `uav-gcs.target.*`, including video latency, altitude mode/offset, gimbal calibration offsets, raycast range/step/min-down-angle, and stale-telemetry threshold). The camera panel shows a crosshair plus compact lat/lon, slant range, and quality. Valid or warn estimates also draw an orange map marker and dashed line-of-sight from the UAV; **bad** estimates hide the marker/LOS. Desktop requires a loaded DEM — missing terrain surfaces `dem_not_loaded` instead of silently using flat terrain. Browser dev uses synthetic flat terrain only. The sidebar also keeps an in-memory **target sample log** (600 samples) with manual JSON/CSV export; desktop can save to disk via native file dialogs (`save_target_log`).
 
-On the **desktop** link, gimbal attitude for estimation comes from MAVLink **285** (`GIMBAL_DEVICE_ATTITUDE_STATUS`, preferred) or compact legacy **265** euler payloads (skipped when the frame is large enough to be standard `VIDEO_STREAM_INFORMATION`). Vehicle **ATTITUDE** remains the body-fixed fallback in TypeScript when no gimbal message is present. Pose-related frames also populate `sampledAtMs` for ring-buffer alignment; check the activity panel for `GIMBAL_DEVICE_ATTITUDE_STATUS` / `GIMBAL_LEGACY` frame counts.
+On the **desktop** link, gimbal attitude for estimation comes from MAVLink **285** (`GIMBAL_DEVICE_ATTITUDE_STATUS`, preferred) or compact legacy **265** euler payloads (skipped when the frame is large enough to be standard `MOUNT_ORIENTATION`). Vehicle **ATTITUDE** remains the body-fixed fallback in TypeScript when no gimbal message is present. Pose-related frames also populate `sampledAtMs` for ring-buffer alignment; check the activity panel for `GIMBAL_DEVICE_ATTITUDE_STATUS` / `GIMBAL_LEGACY` frame counts.
 
 ## Configuration (browser stack)
 

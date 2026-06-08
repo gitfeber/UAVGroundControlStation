@@ -481,6 +481,7 @@ fn save_target_log(path: String, contents: String) -> Result<(), String> {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(DesktopState {
             telemetry: Arc::new(Mutex::new(initial_telemetry())),
             stop_reader: Mutex::new(None),
@@ -1012,7 +1013,7 @@ fn mavlink_crc_extra(message_id: u32) -> Option<u8> {
         241 => 90,
         245 => 130,
         253 => 83,
-        265 => 274,
+        265 => 26,
         285 => 137,
         _ => return None,
     };
@@ -1667,6 +1668,28 @@ fn read_f32(payload: &[u8], offset: usize) -> Option<f32> {
 mod parser_tests {
     use super::*;
 
+    fn mavlink_v2_packet(message_id: u32, payload: &[u8], crc_extra: u8, sequence: &mut u8) -> Vec<u8> {
+        let current_sequence = *sequence;
+        *sequence = (*sequence).wrapping_add(1);
+
+        let mut frame = Vec::with_capacity(12 + payload.len());
+        frame.push(0xfd);
+        frame.push(payload.len() as u8);
+        frame.push(0);
+        frame.push(0);
+        frame.push(current_sequence);
+        frame.push(255);
+        frame.push(190);
+        frame.push((message_id & 0xff) as u8);
+        frame.push(((message_id >> 8) & 0xff) as u8);
+        frame.push(((message_id >> 16) & 0xff) as u8);
+        frame.extend_from_slice(payload);
+
+        let checksum = mavlink_x25_crc(&frame[1..], crc_extra);
+        frame.extend_from_slice(&checksum.to_le_bytes());
+        frame
+    }
+
     #[test]
     fn parses_mavlink_v1_heartbeat() {
         let mut sequence = 0_u8;
@@ -1704,7 +1727,7 @@ mod parser_tests {
     fn parses_gimbal_device_attitude_status_frame() {
         let payload = fixtures::gimbal_285::PAYLOAD_IDENTITY_EARTH_FRAME;
         let mut sequence = 0_u8;
-        let frame = mavlink_v1_packet(285, &payload, 137, &mut sequence);
+        let frame = mavlink_v2_packet(285, &payload, 137, &mut sequence);
         let mut parser = MavlinkFrameParser::new();
         let frames = parser.push_isolated(&frame);
         assert_eq!(frames.len(), 1);
@@ -1715,7 +1738,7 @@ mod parser_tests {
     fn golden_gimbal_285_fixture_packet_decodes_identity_quaternion_and_flags() {
         let payload = fixtures::gimbal_285::PAYLOAD_IDENTITY_EARTH_FRAME;
         let mut sequence = 0_u8;
-        let frame = mavlink_v1_packet(285, &payload, 137, &mut sequence);
+        let frame = mavlink_v2_packet(285, &payload, 137, &mut sequence);
         let mut parser = MavlinkFrameParser::new();
         let frames = parser.push_isolated(&frame);
         assert_eq!(frames.len(), 1);

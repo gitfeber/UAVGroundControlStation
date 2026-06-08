@@ -1,6 +1,6 @@
 [package]
 name = "uav-ground-control-station"
-version = "0.2.9"
+version = "0.2.11"
 description = "Native desktop shell for UAV Ground Control Station"
 authors = ["F. Eber"]
 license = "GPL-3.0-only"
@@ -22,3 +22,4 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serialport = "4"
 tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"

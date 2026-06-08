@@ -46,4 +46,4 @@ Decoder priority: earth (64) → vehicle (32) → legacy lock (16) → vehicle f
 
 Rust constants: `apps/desktop/src-tauri/src/fixtures/gimbal_285.rs`
 
-MAVLink v1 wrapper uses message id **285**, CRC extra **137**.
+MAVLink v2 wrapper uses message id **285**, CRC extra **137**.

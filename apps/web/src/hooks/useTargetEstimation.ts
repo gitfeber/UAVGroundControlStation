@@ -16,7 +16,8 @@ import {
 } from "@uav-ground-control-station/target-estimation";
 import { loadTargetEstimationSettings, loadTerrainModelPath, saveTargetEstimationSettings, saveTerrainModelPath } from "../lib/targetSettings";
 import { downloadTextFile, targetSampleLogFilename } from "../lib/targetSampleLogDownload";
-import { TauriDemTerrainProvider } from "../lib/tauriDemTerrain";
+import { clearDesktopTerrainModel, TauriDemTerrainProvider } from "../lib/tauriDemTerrain";
+import { isTauriDesktop, pickTargetLogSavePath, pickTerrainModelPath } from "../lib/tauriDialogs";
 
 const ESTIMATE_INTERVAL_MS = 100;
 
@@ -28,6 +29,7 @@ export interface TargetEstimationController {
   terrainPath: string;
   setTerrainPath: (path: string) => void;
   loadTerrainModel: () => Promise<void>;
+  browseTerrainModel: () => Promise<void>;
   clearTerrainModel: () => Promise<void>;
   runtimeMode: "web" | "desktop";
   liveOnlyBlocked: boolean;
@@ -37,10 +39,11 @@ export interface TargetEstimationController {
   exportSampleLogCsv: () => void;
   clearSampleLog: () => void;
   saveSampleLogToPath: (path: string) => Promise<void>;
+  saveSampleLogWithDialog: (format: "json" | "csv") => Promise<void>;
 }
 
 function runtimeMode(): "web" | "desktop" {
-  return window.__TAURI_INTERNALS__ ? "desktop" : "web";
+  return isTauriDesktop() ? "desktop" : "web";
 }
 
 function withSampleTime(state: TelemetryState): TelemetryState {
@@ -180,7 +183,7 @@ export function useTargetEstimation(
   }, []);
 
   const loadTerrainModel = useCallback(async () => {
-    if (mode !== "desktop") return;
+    if (mode !== "desktop" || !terrainPath.trim()) return;
     const provider = await TauriDemTerrainProvider.load(terrainPath.trim());
     tauriTerrainRef.current = provider;
     terrainRef.current = provider;
@@ -188,9 +191,20 @@ export function useTargetEstimation(
     ensureSession();
   }, [ensureSession, mode, terrainPath]);
 
+  const browseTerrainModel = useCallback(async () => {
+    if (mode !== "desktop") return;
+    const path = await pickTerrainModelPath();
+    if (!path) return;
+    setTerrainPathState(path);
+    const provider = await TauriDemTerrainProvider.load(path);
+    tauriTerrainRef.current = provider;
+    terrainRef.current = provider;
+    setTerrainMetadata(provider.metadata);
+    ensureSession();
+  }, [ensureSession, mode]);
+
   const clearTerrainModel = useCallback(async () => {
     if (mode === "desktop") {
-      const { clearDesktopTerrainModel } = await import("../lib/tauriDemTerrain");
       await clearDesktopTerrainModel();
     }
     setTerrainPathState("");
@@ -231,6 +245,15 @@ export function useTargetEstimation(
     await invoke("save_target_log", { path: trimmed, contents });
   }, [mode]);
 
+  const saveSampleLogWithDialog = useCallback(
+    async (format: "json" | "csv") => {
+      const path = await pickTargetLogSavePath(format);
+      if (!path) return;
+      await saveSampleLogToPath(path);
+    },
+    [saveSampleLogToPath]
+  );
+
   return {
     estimate,
     settings,
@@ -239,6 +262,7 @@ export function useTargetEstimation(
     terrainPath,
     setTerrainPath,
     loadTerrainModel,
+    browseTerrainModel,
     clearTerrainModel,
     runtimeMode: mode,
     liveOnlyBlocked: sourceMode !== "live",
@@ -247,6 +271,7 @@ export function useTargetEstimation(
     exportSampleLogJson,
     exportSampleLogCsv,
     clearSampleLog,
-    saveSampleLogToPath
+    saveSampleLogToPath,
+    saveSampleLogWithDialog
   };
 }

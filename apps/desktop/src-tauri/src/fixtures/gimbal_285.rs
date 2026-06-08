@@ -4,7 +4,6 @@ pub const GIMBAL_DEVICE_FLAGS_YAW_IN_EARTH_FRAME: u16 = 64;
 pub const GIMBAL_DEVICE_FLAGS_YAW_IN_VEHICLE_FRAME: u16 = 32;
 
 pub mod offsets {
-    pub const TIME_BOOT_MS: usize = 0;
     pub const Q_W: usize = 4;
     pub const Q_X: usize = 8;
     pub const Q_Y: usize = 12;
@@ -13,6 +12,7 @@ pub mod offsets {
 }
 
 /// Identity quaternion, earth-frame yaw, `time_boot_ms = 500`.
+#[cfg(test)]
 pub const PAYLOAD_IDENTITY_EARTH_FRAME: [u8; 47] = [
     0xF4, 0x01, 0x00, 0x00, // time_boot_ms = 500
     0x00, 0x00, 0x80, 0x3F, // q[0] w = 1.0
@@ -32,6 +32,7 @@ pub const PAYLOAD_IDENTITY_EARTH_FRAME: [u8; 47] = [
 ];
 
 /// Identity quaternion, vehicle-frame yaw flag.
+#[cfg(test)]
 pub const PAYLOAD_IDENTITY_VEHICLE_FRAME: [u8; 47] = {
     let mut payload = PAYLOAD_IDENTITY_EARTH_FRAME;
     payload[offsets::FLAGS] = 0x20;

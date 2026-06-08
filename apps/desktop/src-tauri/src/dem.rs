@@ -351,7 +351,6 @@ impl DemService {
         Ok(SampleResult {
             elevation_m: f64::from(point_amsl),
             elevation_enu: f64::from(point_amsl) - f64::from(anchor_amsl),
-            nodata: false,
         })
     }
 
@@ -383,7 +382,6 @@ impl DemService {
 struct SampleResult {
     elevation_m: f64,
     elevation_enu: f64,
-    nodata: bool,
 }
 
 impl Default for DemService {

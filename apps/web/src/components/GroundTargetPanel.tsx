@@ -18,6 +18,7 @@ export function GroundTargetPanel({
   terrainPath,
   setTerrainPath,
   loadTerrainModel,
+  browseTerrainModel,
   clearTerrainModel,
   runtimeMode,
   liveOnlyBlocked,
@@ -26,7 +27,7 @@ export function GroundTargetPanel({
   exportSampleLogJson,
   exportSampleLogCsv,
   clearSampleLog,
-  saveSampleLogToPath,
+  saveSampleLogWithDialog,
   sortable,
   onDragStart,
   onDragEnd
@@ -277,8 +278,11 @@ export function GroundTargetPanel({
               placeholder="/path/to/dem.tif"
             />
             <div className="flex gap-2">
+              <button type="button" className="btn-secondary flex-1" onClick={() => void browseTerrainModel()}>
+                Browse…
+              </button>
               <button type="button" className="btn-secondary flex-1" onClick={() => void loadTerrainModel()}>
-                Load DEM
+                Reload
               </button>
               <button type="button" className="btn-secondary flex-1" onClick={() => void clearTerrainModel()}>
                 Clear
@@ -316,16 +320,22 @@ export function GroundTargetPanel({
               Clear log
             </button>
             {runtimeMode === "desktop" ? (
-              <button
-                type="button"
-                className="btn-secondary flex-1"
-                onClick={() => {
-                  const path = window.prompt("Save target sample log path (.json or .csv)", "target-log.json");
-                  if (path) void saveSampleLogToPath(path);
-                }}
-              >
-                Save to path
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="btn-secondary flex-1"
+                  onClick={() => void saveSampleLogWithDialog("json")}
+                >
+                  Save JSON…
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary flex-1"
+                  onClick={() => void saveSampleLogWithDialog("csv")}
+                >
+                  Save CSV…
+                </button>
+              </>
             ) : null}
           </div>
         </div>
