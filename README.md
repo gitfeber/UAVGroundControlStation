@@ -54,7 +54,7 @@ Prefer bench testing and disconnected telemetry validation before using the soft
 
 ## Features
 
-- **Live map** with flight track (up to 5000 points), home reference, distance, and bottom-center **Attitude HUD** (pitch ladder, roll arc, heading tape, speed/altitude, climb bar, armed/mode)
+- **Live map** with flight track (up to 5000 points), home reference, distance, bottom-center **Attitude HUD** (pitch ladder, roll arc, heading tape, speed/altitude, climb bar, armed/mode), and in-app **basemap switcher** (Tactical / Satellite / Topo; persisted in `localStorage` as `uav-gcs.map.basemap`)
 - **Telemetry sidebar** — **Text** or **Inst** (mini gauges with the same telemetry fields as text mode); drag card headers (⠿) to reorder (shared order for both views, stored in `uav-gcs.sidebar.order`); **Reset** restores recommended flight-priority order; alerts stay fixed at the top
 - **Serial link** — port picker (USB/PNP preferred), manual path entry, common baud rates
 - **Activity log** — connection status, parser stats, frame message stats
@@ -262,8 +262,8 @@ On the **desktop** link, gimbal attitude for estimation comes from MAVLink **285
 | `VITE_WS_URL` | WebSocket for telemetry (default: `ws://localhost:3001/ws`) |
 | `VITE_LINK` | Set to `webserial` for the **Hosted Web App** build (`pnpm build:cloud` sets this automatically) |
 | `VITE_BASE_PATH` | Optional asset base for hosted deploys (e.g. `/uav-gcs/`). Cloud builds default to `./` (relative) so subpath hosting works |
-| `VITE_MAP_STYLE_URL` | Optional: full MapLibre style URL |
-| `VITE_SATELLITE_TILE_URL` | Optional: raster satellite tile URL |
+| `VITE_MAP_STYLE_URL` | Optional: full MapLibre style URL (hides the in-app basemap switcher) |
+| `VITE_SATELLITE_TILE_URL` | Optional: custom raster tile URL for the **Satellite** preset (default: Esri World Imagery) |
 | `VITE_VIDEO_URL` / `VITE_VIDEO_KIND` | Optional: camera stream (e.g. MJPEG) |
 | `VITE_ENABLE_SPLASH_SCREEN` | Startup HUD splash overlay (default: enabled; set `false` to skip) |
 
