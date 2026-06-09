@@ -26,7 +26,7 @@ export interface TelemetrySource {
   logs: ActivityLogEntry[];
   error: string | null;
   wsConnected: boolean;
-  runtimeMode: "web" | "desktop";
+  runtimeMode: "web" | "desktop" | "cloud";
   refreshPorts: () => Promise<void>;
   connect: (request: ConnectRequest) => Promise<void>;
   disconnect: () => Promise<void>;

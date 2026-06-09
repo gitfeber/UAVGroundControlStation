@@ -1,6 +1,6 @@
 {
   "name": "uav-ground-control-station",
-  "version": "0.2.11",
+  "version": "0.2.17",
   "private": true,
   "description": "Local browser-based MAVLink ground control station for UAVs.",
   "license": "GPL-3.0-only",
@@ -13,6 +13,7 @@
     "dev": "pnpm --filter @uav-ground-control-station/shared build && concurrently -k -n server,web -c cyan,green \"pnpm --filter @uav-ground-control-station/server dev\" \"wait-on tcp:127.0.0.1:3001 && pnpm --filter @uav-ground-control-station/web dev\"",
     "dev:desktop": "pnpm --filter @uav-ground-control-station/shared build && pnpm --filter @uav-ground-control-station/target-estimation build && pnpm --filter @uav-ground-control-station/desktop dev",
     "build": "pnpm --filter @uav-ground-control-station/shared build && pnpm --filter @uav-ground-control-station/server build && pnpm --filter @uav-ground-control-station/web build",
+    "build:cloud": "pnpm --filter @uav-ground-control-station/web build:cloud",
     "build:desktop": "pnpm --filter @uav-ground-control-station/shared build && pnpm --filter @uav-ground-control-station/desktop build",
     "lint": "pnpm -r lint",
     "test": "pnpm --filter @uav-ground-control-station/shared build && pnpm --filter @uav-ground-control-station/target-estimation test && pnpm --filter @uav-ground-control-station/web test",

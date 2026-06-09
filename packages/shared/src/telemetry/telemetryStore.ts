@@ -1,4 +1,4 @@
-import type { TelemetryState } from "@uav-ground-control-station/shared";
+import type { TelemetryState } from "../index.js";
 import { flightModeLabel, mavTypeLabel } from "./flightModes.js";
 import { haversineDistanceM, type Coordinate } from "./geo.js";
 
@@ -125,9 +125,15 @@ export class TelemetryStore {
     this.state.system.sensorsEnabled = payload.getUint32(4, true);
     this.state.system.sensorsHealth = payload.getUint32(8, true);
     this.state.system.loadPercent = loadRaw / 10;
-    this.setVoltage(Number.isFinite(voltage) && voltage > 0 ? voltage : null);
-    this.setCurrent(currentRaw === -1 ? null : currentRaw / 100);
-    this.state.battery.remainingPercent = batteryRemaining < 0 ? null : batteryRemaining;
+    if (Number.isFinite(voltage) && voltage > 0) {
+      this.setVoltage(voltage);
+    }
+    if (currentRaw !== -1) {
+      this.setCurrent(currentRaw / 100);
+    }
+    if (batteryRemaining >= 0) {
+      this.state.battery.remainingPercent = batteryRemaining;
+    }
   }
 
   updateBatteryStatus(payload: DataView): void {
@@ -146,10 +152,18 @@ export class TelemetryStore {
     const consumed = payload.getInt32(0, true);
     const remaining = payload.getInt8(35);
 
-    this.setVoltage(totalVoltage);
-    this.setCurrent(currentRaw === -1 ? null : currentRaw / 100);
-    this.state.battery.consumedMah = consumed < 0 ? null : consumed;
-    this.state.battery.remainingPercent = remaining < 0 ? null : remaining;
+    if (totalVoltage !== null) {
+      this.setVoltage(totalVoltage);
+    }
+    if (currentRaw !== -1) {
+      this.setCurrent(currentRaw / 100);
+    }
+    if (consumed >= 0) {
+      this.state.battery.consumedMah = consumed;
+    }
+    if (remaining >= 0) {
+      this.state.battery.remainingPercent = remaining;
+    }
   }
 
   updateGpsRawInt(payload: DataView): void {
@@ -267,6 +281,135 @@ export class TelemetryStore {
     }
   }
 
+  markCrsfPacket(): void {
+    this.markPacket(255, 191);
+    this.state.vehicle.type = "TX16S CRSF";
+  }
+
+  updateCrsfGps(payload: Uint8Array): void {
+    if (payload.byteLength < 15) return;
+
+    const lat = scaledCrsfCoordinate(readI32Be(payload, 0));
+    const lon = scaledCrsfCoordinate(readI32Be(payload, 4));
+    const speedKmh = readU16Be(payload, 8);
+    const heading = readU16Be(payload, 10);
+    const altM = readU16Be(payload, 12);
+    const satellites = payload[14];
+    const sats = satellites === undefined || satellites === 255 ? null : satellites;
+    const hasPositionFix = sats !== null && sats >= 3;
+
+    if (sats !== null) {
+      this.state.gps.satellites = sats;
+      this.state.gps.fixType = sats >= 6 ? 3 : sats >= 3 ? 2 : sats > 0 ? 1 : 0;
+      this.state.gps.fixLabel =
+        sats >= 6 ? "3D Fix" : sats >= 3 ? "2D Fix" : sats > 0 ? "No Fix" : "No GPS";
+    }
+
+    // ArduPilot still emits CRSF GPS frames without a GNSS module; ignore lat/lon until sats >= 3.
+    if (hasPositionFix && lat !== null && lon !== null) {
+      this.updatePosition(lat, lon);
+      if (heading !== null && heading !== 65535) {
+        const headingDeg = heading / 100;
+        this.state.position.headingDeg = headingDeg;
+        this.state.position.groundCourseDeg = headingDeg;
+        this.state.motion.yawDeg = headingDeg;
+      }
+      if (altM !== null && altM !== 65535) {
+        const altitude = altM - 1000;
+        this.state.position.relativeAlt = altitude;
+        this.state.position.altMsl = altitude;
+      }
+      if (speedKmh !== null && speedKmh !== 65535) {
+        this.state.motion.groundSpeed = speedKmh / 10 / 3.6;
+      }
+      this.updateStats();
+    }
+  }
+
+  updateCrsfVario(payload: Uint8Array): void {
+    if (payload.byteLength < 2) return;
+    const cmPerS = readI16Be(payload, 0);
+    if (cmPerS !== null) {
+      this.state.motion.climbRate = cmPerS / 100;
+    }
+  }
+
+  updateCrsfBattery(payload: Uint8Array): void {
+    if (payload.byteLength < 8) return;
+
+    const voltageRaw = readU16Be(payload, 0);
+    const currentRaw = readU16Be(payload, 2);
+    const consumed = normalizeCrsfConsumedMah(readU24Be(payload, 4));
+    const remaining = normalizeCrsfBatteryRemaining(payload[7]);
+
+    if (isValidCrsfBatteryU16(voltageRaw)) {
+      this.setVoltage(voltageRaw / 10);
+    }
+    if (isValidCrsfBatteryU16(currentRaw)) {
+      this.setCurrent(currentRaw / 10);
+    }
+    if (consumed !== null) {
+      this.state.battery.consumedMah = consumed;
+    }
+    if (remaining !== null) {
+      this.state.battery.remainingPercent = remaining;
+    }
+  }
+
+  updateCrsfBaroAltitude(payload: Uint8Array): void {
+    if (payload.byteLength < 3) return;
+    const altitudeDm = readI16Be(payload, 0);
+    if (altitudeDm !== null) {
+      this.state.position.relativeAlt = altitudeDm / 10;
+    }
+  }
+
+  updateCrsfLinkRx(payload: Uint8Array): void {
+    if (payload.byteLength < 10) return;
+    this.state.radio.rssi = payload[0]!;
+    this.state.radio.linkQuality = payload[2]!;
+    this.state.radio.fixed = payload[4]!;
+    this.state.radio.remRssi = payload[7]!;
+    this.updateStats();
+  }
+
+  updateCrsfAttitude(payload: Uint8Array): void {
+    if (payload.byteLength < 2) return;
+    const pitch = attitudeAxisDeg(payload, 0);
+    const roll = payload.byteLength >= 4 ? attitudeAxisDeg(payload, 2) : null;
+    const yaw = payload.byteLength >= 6 ? attitudeAxisDeg(payload, 4) : null;
+    if (pitch !== null) this.state.motion.pitchDeg = pitch;
+    if (roll !== null) this.state.motion.rollDeg = roll;
+    if (yaw !== null) this.state.motion.yawDeg = yaw;
+  }
+
+  updateCrsfMavlinkFc(payload: Uint8Array): void {
+    if (payload.byteLength < 9) return;
+    const customMode = readU32Be(payload, 3) ?? 0;
+    const firmwareType = payload[8] ?? 1;
+    this.state.vehicle.flightMode = flightModeLabel(firmwareType, customMode);
+    this.state.vehicle.type = mavTypeLabel(firmwareType);
+  }
+
+  updateCrsfFlightMode(payload: Uint8Array): void {
+    const text = cleanAscii(payload);
+    if (isPlausibleFlightMode(text)) {
+      this.state.vehicle.flightMode = text;
+    }
+  }
+
+  applyPassthroughVoltage(voltage: number): void {
+    this.setVoltage(voltage);
+  }
+
+  applyPassthroughCurrent(current: number): void {
+    this.setCurrent(current);
+  }
+
+  applyPassthroughConsumedMah(consumedMah: number): void {
+    this.state.battery.consumedMah = consumedMah;
+  }
+
   private updatePosition(lat: number, lon: number): void {
     this.state.position.lat = lat;
     this.state.position.lon = lon;
@@ -279,13 +422,13 @@ export class TelemetryStore {
     );
   }
 
-  private setVoltage(voltage: number | null): void {
+  private setVoltage(voltage: number): void {
     this.state.battery.voltage = voltage;
-    this.state.battery.cellVoltageEstimate = voltage === null ? null : voltage / 4;
+    this.state.battery.cellVoltageEstimate = estimateCellVoltage(voltage);
     this.state.stats.minVoltage = minNullable(this.state.stats.minVoltage, voltage);
   }
 
-  private setCurrent(current: number | null): void {
+  private setCurrent(current: number): void {
     this.state.battery.current = current;
     this.state.stats.maxCurrent = maxNullable(this.state.stats.maxCurrent, current);
   }
@@ -332,6 +475,33 @@ function scaledCoordinate(raw: number): number | null {
   return raw / 1e7;
 }
 
+const CRSF_BATTERY_UNKNOWN_U16 = 0x7fff;
+const CRSF_BATTERY_CONSUMED_UNKNOWN = 0x7fff;
+
+function isValidCrsfBatteryU16(raw: number | null): raw is number {
+  return raw !== null && raw > 0 && raw !== CRSF_BATTERY_UNKNOWN_U16;
+}
+
+/** CRSF 0x08 remaining is int8 percent; -1 (0xFF) and values >100 mean unknown. */
+function normalizeCrsfBatteryRemaining(raw: number | undefined): number | null {
+  if (raw === undefined) return null;
+  const signed = raw > 127 ? raw - 256 : raw;
+  if (signed < 0 || signed > 100) return null;
+  return signed;
+}
+
+function normalizeCrsfConsumedMah(raw: number | null): number | null {
+  if (raw === null || raw < 0 || raw >= CRSF_BATTERY_CONSUMED_UNKNOWN) return null;
+  return raw;
+}
+
+/** CRSF GPS lat/lon are signed i32 degrees * 1e7 (big-endian on the wire). */
+function scaledCrsfCoordinate(raw: number | null): number | null {
+  if (raw === null || raw === 0 || raw === 0x7fffffff || raw === -0x80000000) return null;
+  const deg = raw / 10_000_000;
+  return Number.isFinite(deg) ? deg : null;
+}
+
 function radiansToDegrees(value: number): number {
   return (value * 180) / Math.PI;
 }
@@ -352,4 +522,86 @@ function maxNullable(current: number | null, next: number | null): number | null
 function minNullable(current: number | null, next: number | null): number | null {
   if (next === null || !Number.isFinite(next)) return current;
   return current === null ? next : Math.min(current, next);
+}
+
+/** Infer per-cell voltage from pack voltage (~3.8 V nominal per LiPo cell). */
+function estimateCellVoltage(packVoltage: number): number | null {
+  if (!Number.isFinite(packVoltage) || packVoltage <= 0) return null;
+  const cells = Math.min(14, Math.max(1, Math.round(packVoltage / 3.8)));
+  return packVoltage / cells;
+}
+
+function readI16Be(data: Uint8Array, offset: number): number | null {
+  if (offset + 2 > data.byteLength) return null;
+  const view = new DataView(data.buffer, data.byteOffset + offset, 2);
+  return view.getInt16(0, false);
+}
+
+function readI32Be(data: Uint8Array, offset: number): number | null {
+  if (offset + 4 > data.byteLength) return null;
+  const view = new DataView(data.buffer, data.byteOffset + offset, 4);
+  return view.getInt32(0, false);
+}
+
+function readU16Be(data: Uint8Array, offset: number): number | null {
+  if (offset + 2 > data.byteLength) return null;
+  const view = new DataView(data.buffer, data.byteOffset + offset, 2);
+  return view.getUint16(0, false);
+}
+
+function readU24Be(data: Uint8Array, offset: number): number | null {
+  if (offset + 3 > data.byteLength) return null;
+  return (data[offset]! << 16) | (data[offset + 1]! << 8) | data[offset + 2]!;
+}
+
+function readU32Be(data: Uint8Array, offset: number): number | null {
+  if (offset + 4 > data.byteLength) return null;
+  const view = new DataView(data.buffer, data.byteOffset + offset, 4);
+  return view.getUint32(0, false);
+}
+
+function attitudeAxisDeg(payload: Uint8Array, offset: number): number | null {
+  const rawBe = readI16Be(payload, offset);
+  if (rawBe !== null) {
+    const degrees = radians10000ToDeg(rawBe);
+    if (degrees !== null) return degrees;
+  }
+  if (offset + 2 > payload.byteLength) return null;
+  const view = new DataView(payload.buffer, payload.byteOffset + offset, 2);
+  return radians10000ToDeg(view.getInt16(0, true));
+}
+
+function radians10000ToDeg(raw: number): number | null {
+  const radians = raw / 10_000;
+  if (!Number.isFinite(radians)) return null;
+  let degrees = (radians * 180) / Math.PI;
+  if (!Number.isFinite(degrees)) return null;
+  while (degrees > 180) degrees -= 360;
+  while (degrees < -180) degrees += 360;
+  return degrees;
+}
+
+function cleanAscii(payload: Uint8Array): string {
+  const bytes: number[] = [];
+  for (let i = 0; i < payload.byteLength; i += 1) {
+    const byte = payload[i]!;
+    if (byte === 0) break;
+    if (byte >= 32 && byte <= 126) bytes.push(byte);
+  }
+  return new TextDecoder().decode(new Uint8Array(bytes)).trim();
+}
+
+function isPlausibleFlightMode(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < 3 || trimmed.length > 16) return false;
+  let letters = 0;
+  for (const ch of trimmed) {
+    if (/[A-Za-z]/.test(ch)) {
+      letters += 1;
+      continue;
+    }
+    if (/[0-9 _+-]/.test(ch)) continue;
+    return false;
+  }
+  return letters >= 2;
 }

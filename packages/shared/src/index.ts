@@ -326,3 +326,13 @@ export interface SimulationOptions {
   startLat?: number;
   startLon?: number;
 }
+
+// ---------------------------------------------------------------------------
+// Telemetry decode (shared by the Node server and the browser Web Serial link)
+// ---------------------------------------------------------------------------
+
+export { TelemetryStore, createInitialTelemetryState } from "./telemetry/telemetryStore.js";
+export { applyMavlinkFrame, messageIds } from "./telemetry/mavlinkDispatch.js";
+export type { MavlinkFrame } from "./telemetry/mavlinkDispatch.js";
+export { applyCrsfFrame, crsfMessageId, crsfMessageLabel, CRSF_STAT_BASE } from "./telemetry/crsfDispatch.js";
+export type { CrsfFrame } from "./telemetry/crsfDispatch.js";

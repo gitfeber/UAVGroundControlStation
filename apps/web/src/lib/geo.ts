@@ -34,6 +34,8 @@ export function validCoordinate(
   const latNum = Number(lat);
   const lonNum = Number(lon);
   if (!isValidLngLat(lonNum, latNum)) return null;
+  // Reject null-island / unset CRSF coordinates that still parse as finite numbers.
+  if (Math.abs(latNum) < 1e-6 && Math.abs(lonNum) < 1e-6) return null;
   return { lat: latNum, lon: lonNum };
 }
 

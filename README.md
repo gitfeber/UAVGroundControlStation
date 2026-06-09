@@ -4,7 +4,7 @@
 
 A local ground control station for UAVs — map, telemetry, and serial link in one dashboard.
 
-![Runtime](https://img.shields.io/badge/runtime-Desktop%20%7C%20Browser-lightgrey)
+![Runtime](https://img.shields.io/badge/runtime-Desktop%20%7C%20Browser%20%7C%20Hosted-lightgrey)
 ![TypeScript](https://img.shields.io/badge/TypeScript-monorepo-3178c6)
 
 ---
@@ -17,8 +17,23 @@ A local ground control station for UAVs — map, telemetry, and serial link in o
 |---------|----------|-----------|---------------|
 | **Desktop** (Tauri, recommended) | Primary operator runtime, TX16S, Windows `COM*` | CRSF + MAVLink, GCS wake-up | Native Rust |
 | **Browser + Node** | Development, MAVLink-direct links | MAVLink | `apps/server` (fallback) |
+| **Hosted Web App** (`VITE_LINK=webserial`) | Zero-install browser GCS, self-host or third-party hosting | CRSF + MAVLink (no wake-up bytes) | Web Serial API (Chromium + HTTPS only) |
 
-For **RadioMaster TX16S** with a USB telemetry mirror, the **desktop app** is the intended runtime (420000 baud, CRSF-first). See [`docs/adr/0001-dual-runtime-desktop-canonical.md`](docs/adr/0001-dual-runtime-desktop-canonical.md).
+For **RadioMaster TX16S** with a USB telemetry mirror, the **desktop app** remains the canonical runtime (420000 baud, CRSF-first, GCS wake-up). The **Hosted Web App** also supports TX16S CRSF at **420000** baud for zero-install use. See [`docs/adr/0001-dual-runtime-desktop-canonical.md`](docs/adr/0001-dual-runtime-desktop-canonical.md).
+
+The **Hosted Web App** (internal runtime key `cloud`) is a pure browser SPA that reads the radio directly over the Web Serial API — no Node server. **Telemetry stays in your browser.** The hosted site delivers only the static app shell; GPS, flight data, and serial traffic never leave the operator's machine. It frames CRSF (TX16S telem mirror) and MAVLink (direct FC USB) in the browser and works in Chromium-based browsers over HTTPS (Firefox and Safari show a clear fallback notice). See [`docs/adr/0006-browser-webserial-cloud-runtime.md`](docs/adr/0006-browser-webserial-cloud-runtime.md) and [`CONTEXT.md`](CONTEXT.md).
+
+### Hosted Web App — what v1 includes (and does not)
+
+| Included in v1 | Not in v1 (later decisions) |
+|----------------|----------------------------|
+| Static SPA over HTTPS | Accounts or login |
+| Web Serial CRSF + MAVLink link (user-granted port only) | Server-side telemetry persistence |
+| Replay and simulation (frontend-only, no upload) | Fleet or project management |
+| Same dashboard UI as desktop/browser dev | Cloud logging or sync |
+| | Billing or paid tiers |
+
+Self-host the Hosted Web App with `pnpm build:cloud` and serve **`apps/web/dist` from that command only** — not the output of `pnpm build` (desktop/Node stack). A wrong artifact shows the COM port dropdown and spams `WebSocket connection to …/ws failed` because the app is in `web` mode instead of `cloud`. Do not embed the app in a cross-origin iframe without a `Permissions-Policy` that allows `serial` for your origin — Web Serial is blocked by default in embedded contexts.
 
 ## Safety
 
@@ -134,6 +149,23 @@ pnpm dev
 - Backend: `http://localhost:3001`
 - Frontend: `http://localhost:5173`
 
+### Hosted Web App (build & self-host)
+
+Build the Web Serial SPA (no Node server in the output):
+
+```bash
+pnpm build:cloud
+```
+
+Artifacts: `apps/web/dist/` — serve over **HTTPS** with SPA fallback (`try_files $uri /index.html` on nginx, or equivalent). Open in a Chromium-based browser, connect via the browser's device picker, and use **420000** baud for TX16S CRSF telem mirror or **115200**/**460800** for direct FC MAVLink USB.
+
+Preview locally (still requires HTTPS or localhost for Web Serial):
+
+```bash
+pnpm build:cloud
+pnpm --filter @uav-ground-control-station/web preview
+```
+
 ## Operator notes
 
 ### Serial link
@@ -143,7 +175,9 @@ pnpm dev
 | TX16S telemetry mirror (CRSF-first) | **420000** |
 | Flight controller USB (MAVLink direct) | **115200** or **460800** |
 
-**Symptom:** status shows “Serial linked” but no map/telemetry → usually wrong baud rate or wrong runtime (for TX16S, use desktop).
+**Symptom:** status shows “Serial linked” but no map/telemetry → usually wrong baud rate (TX16S CRSF: **420000**; direct FC MAVLink: **115200** or **460800**).
+
+**CRSF frame stats:** ArduPilot still emits attitude, vario, flight mode, and empty GPS frames over CRSF even without a GNSS module — low counts (single digits) are normal. Handset and link-RX frames flood the stream. Map position and home latch only when CRSF GPS reports **≥3 satellites** with valid coordinates. Battery voltage often arrives first via ArduPilot passthrough (handset/0x80 frames); native CRSF `0x08` is slower. Invalid CRSF sentinels (`0x7FFF` consumed, remaining outside 0–100) are ignored — not a hardware fault.
 
 ### Windows
 
@@ -202,6 +236,8 @@ On the **desktop** link, gimbal attitude for estimation comes from MAVLink **285
 |----------|-------------|
 | `VITE_API_BASE_URL` | Node server REST API (default: `http://localhost:3001`) |
 | `VITE_WS_URL` | WebSocket for telemetry (default: `ws://localhost:3001/ws`) |
+| `VITE_LINK` | Set to `webserial` for the **Hosted Web App** build (`pnpm build:cloud` sets this automatically) |
+| `VITE_BASE_PATH` | Optional asset base for hosted deploys (e.g. `/uav-gcs/`). Cloud builds default to `./` (relative) so subpath hosting works |
 | `VITE_MAP_STYLE_URL` | Optional: full MapLibre style URL |
 | `VITE_SATELLITE_TILE_URL` | Optional: raster satellite tile URL |
 | `VITE_VIDEO_URL` / `VITE_VIDEO_KIND` | Optional: camera stream (e.g. MJPEG) |
@@ -214,7 +250,8 @@ Server: `PORT` (default `3001`), `HOST` (default `127.0.0.1`) in `apps/server`. 
 ```bash
 pnpm lint
 pnpm typecheck
-pnpm build          # browser stack
+pnpm build          # browser stack (Node server + default web build)
+pnpm build:cloud    # Hosted Web App SPA (Web Serial, no server)
 pnpm build:desktop  # desktop installer
 ```
 
@@ -228,7 +265,7 @@ Three workflows split the responsibilities, so it is always clear what publishes
 
 | Workflow | Trigger | Publishes? |
 |----------|---------|------------|
-| [`branch-checks.yml`](.github/workflows/branch-checks.yml) | Pull requests | No — validation only (typecheck, lint, tests, build) |
+| [`branch-checks.yml`](.github/workflows/branch-checks.yml) | Pull requests | No — validation only (typecheck, lint, tests, `build`, `build:cloud`) |
 | [`ci.yml`](.github/workflows/ci.yml) | Push to `main`/`master` | **Preview prerelease** (tag `v<version>-build.<run>`) after tests pass |
 | [`release.yml`](.github/workflows/release.yml) | Pushed `v*` tag or manual dispatch | **Stable release** (`prerelease: false`) |
 

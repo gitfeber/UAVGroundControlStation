@@ -1138,7 +1138,9 @@ fn update_sys_status(telemetry: &mut TelemetryState, payload: &[u8]) {
 
     set_voltage(telemetry, voltage);
     set_current(telemetry, current);
-    telemetry.battery.remaining_percent = remaining;
+    if let Some(remaining) = remaining {
+        telemetry.battery.remaining_percent = Some(remaining);
+    }
 }
 
 fn update_battery_status(telemetry: &mut TelemetryState, payload: &[u8]) {
@@ -1322,10 +1324,12 @@ fn update_nav_controller_output(telemetry: &mut TelemetryState, payload: &[u8]) 
     }
 }
 
-fn set_voltage(telemetry: &mut TelemetryState, voltage: Option<f64>) {
-    telemetry.battery.voltage = voltage;
-    telemetry.battery.cell_voltage_estimate = voltage.and_then(estimate_cell_voltage);
-    telemetry.stats.min_voltage = min_optional(telemetry.stats.min_voltage, voltage);
+pub(crate) fn set_voltage(telemetry: &mut TelemetryState, voltage: Option<f64>) {
+    if let Some(voltage) = voltage {
+        telemetry.battery.voltage = Some(voltage);
+        telemetry.battery.cell_voltage_estimate = estimate_cell_voltage(voltage);
+        telemetry.stats.min_voltage = min_optional(telemetry.stats.min_voltage, Some(voltage));
+    }
 }
 
 /// Per-cell voltage estimate. Infers the LiPo cell count from the pack voltage
@@ -1340,9 +1344,11 @@ fn estimate_cell_voltage(pack_voltage: f64) -> Option<f64> {
     Some(pack_voltage / cells)
 }
 
-fn set_current(telemetry: &mut TelemetryState, current: Option<f64>) {
-    telemetry.battery.current = current;
-    telemetry.stats.max_current = max_optional(telemetry.stats.max_current, current);
+pub(crate) fn set_current(telemetry: &mut TelemetryState, current: Option<f64>) {
+    if let Some(current) = current {
+        telemetry.battery.current = Some(current);
+        telemetry.stats.max_current = max_optional(telemetry.stats.max_current, Some(current));
+    }
 }
 
 pub(crate) fn update_stats(telemetry: &mut TelemetryState) {
