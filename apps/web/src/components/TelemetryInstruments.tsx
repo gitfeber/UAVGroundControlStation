@@ -1,6 +1,6 @@
 import { useId, type ReactNode } from "react";
 import type { TelemetryState } from "@uav-ground-control-station/shared";
-import { elapsedTime, formatInteger, formatNumber, percentageColor } from "../lib/format";
+import { clampBatteryPercent, elapsedTime, formatInteger, formatNumber, percentageColor } from "../lib/format";
 import { resolveHeadingDeg } from "../lib/resolveHeadingDeg";
 import { resolveHudAltitude, type HudAltitudeDisplay } from "../lib/resolveHudAltitude";
 import type { SidebarCardId } from "../lib/sidebarCardOrder";
@@ -369,7 +369,7 @@ function AttitudeInstrument({ telemetry }: { telemetry: TelemetryState }) {
 
 function BatteryGauge({ telemetry }: { telemetry: TelemetryState }) {
   const { battery, stats } = telemetry;
-  const percent = battery.remainingPercent;
+  const percent = clampBatteryPercent(battery.remainingPercent);
   const fill = percent !== null && Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
   const hasPercent = percent !== null && Number.isFinite(percent);
 

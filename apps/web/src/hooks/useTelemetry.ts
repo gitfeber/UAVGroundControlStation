@@ -9,8 +9,13 @@ import type {
   TelemetryState
 } from "@uav-ground-control-station/shared";
 import { createEmptyTelemetryState, normalizeTelemetryState } from "../lib/initialTelemetry";
+import { runtimeMode } from "../lib/runtimeMode";
+import { WebSerialLink } from "../link/webSerialLink";
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? "";
+
+/** Default baud for the cloud runtime: TX16S CRSF telem mirror (420000). */
+const CLOUD_DEFAULT_BAUD = 420000;
 
 const initialStatus: BackendStatus = {
   serialConnected: false,
@@ -28,7 +33,6 @@ const initialLoggingStatus: LoggingStatus = {
 };
 
 type ServerMessage = TelemetryEnvelope | StatusEnvelope;
-type RuntimeMode = "web" | "desktop";
 
 export interface ActivityLogEntry {
   id: number;
@@ -44,10 +48,6 @@ function websocketUrl(): string {
 
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
   return `${protocol}://${window.location.host}/ws`;
-}
-
-function runtimeMode(): RuntimeMode {
-  return window.__TAURI_INTERNALS__ ? "desktop" : "web";
 }
 
 async function invokeTauri<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -83,6 +83,7 @@ export function useTelemetry() {
   const activeConnectionRef = useRef<{ path: string; baudRate: number; startedAt: number } | null>(null);
   const warningStateRef = useRef({ noRawBytes: false, noMavlinkPackets: false });
   const nextLogIdRef = useRef(1);
+  const webSerialLinkRef = useRef<WebSerialLink | null>(null);
 
   const addLog = useCallback((level: ActivityLogEntry["level"], message: string) => {
     const entry: ActivityLogEntry = {
@@ -100,6 +101,11 @@ export function useTelemetry() {
   }, []);
 
   const refreshPorts = useCallback(async () => {
+    if (mode === "cloud") {
+      // No device list in the browser — Web Serial uses its own picker on connect.
+      setPorts([]);
+      return;
+    }
     try {
       const nextPorts =
         mode === "desktop"
@@ -116,6 +122,10 @@ export function useTelemetry() {
   }, [addLog, mode]);
 
   const refreshStatus = useCallback(async () => {
+    if (mode === "cloud") {
+      // Status is pushed by the Web Serial link's callbacks; nothing to poll.
+      return;
+    }
     if (mode === "desktop") {
       const [nextStatus, nextTelemetry, nextLoggingStatus] = await Promise.all([
         invokeTauri<BackendStatus>("get_status"),
@@ -133,12 +143,30 @@ export function useTelemetry() {
 
   const connect = useCallback(async (request: ConnectRequest) => {
     setError(null);
+    warningStateRef.current = { noRawBytes: false, noMavlinkPackets: false };
+
+    if (mode === "cloud") {
+      const baudRate = request.baudRate ?? CLOUD_DEFAULT_BAUD;
+      activeConnectionRef.current = { path: "Web Serial device", baudRate, startedAt: Date.now() };
+      addLog("info", `Opening a serial device at ${baudRate} baud via the browser picker.`);
+      try {
+        await webSerialLinkRef.current?.connect(baudRate);
+        // Success is logged by the link's onOpen callback; telemetry flows via callbacks.
+      } catch (cause: unknown) {
+        activeConnectionRef.current = null;
+        const message = cause instanceof Error ? cause.message : "Unable to open the serial device.";
+        setError(message);
+        addLog("error", `Connect failed: ${message}`);
+        throw cause;
+      }
+      return;
+    }
+
     activeConnectionRef.current = {
       path: request.path,
       baudRate: request.baudRate ?? 420000,
       startedAt: Date.now()
     };
-    warningStateRef.current = { noRawBytes: false, noMavlinkPackets: false };
     addLog("info", `Opening ${request.path} at ${request.baudRate ?? 420000} baud.`);
 
     try {
@@ -164,6 +192,12 @@ export function useTelemetry() {
 
   const disconnect = useCallback(async () => {
     setError(null);
+    if (mode === "cloud") {
+      await webSerialLinkRef.current?.disconnect("Disconnected by operator.");
+      addLog("info", "Serial device disconnected.");
+      activeConnectionRef.current = null;
+      return;
+    }
     if (mode === "desktop") {
       setStatus(await invokeTauri<BackendStatus>("disconnect"));
     } else {
@@ -174,6 +208,12 @@ export function useTelemetry() {
   }, [addLog, mode]);
 
   const resetSession = useCallback(async () => {
+    if (mode === "cloud") {
+      webSerialLinkRef.current?.resetSession();
+      warningStateRef.current = { noRawBytes: false, noMavlinkPackets: false };
+      addLog("info", "Telemetry session reset.");
+      return;
+    }
     if (mode === "desktop") {
       setTelemetry(normalizeTelemetryState(await invokeTauri<TelemetryState>("reset_session")));
     } else {
@@ -184,6 +224,11 @@ export function useTelemetry() {
   }, [addLog, mode]);
 
   const startLogging = useCallback(async () => {
+    if (mode === "cloud") {
+      // No disk in the browser; persistent logging is deferred (future hosted backend).
+      addLog("warning", "Telemetry logging is not available in the browser runtime yet.");
+      return;
+    }
     if (mode === "desktop") {
       setLoggingStatus(await invokeTauri<LoggingStatus>("start_logging"));
     } else {
@@ -193,6 +238,9 @@ export function useTelemetry() {
   }, [addLog, mode]);
 
   const stopLogging = useCallback(async () => {
+    if (mode === "cloud") {
+      return;
+    }
     if (mode === "desktop") {
       setLoggingStatus(await invokeTauri<LoggingStatus>("stop_logging"));
     } else {
@@ -202,10 +250,39 @@ export function useTelemetry() {
   }, [addLog, mode]);
 
   useEffect(() => {
-    addLog("info", `Runtime initialized in ${mode === "desktop" ? "Tauri desktop" : "browser"} mode.`);
+    const modeLabel =
+      mode === "desktop" ? "Tauri desktop" : mode === "cloud" ? "cloud (Web Serial)" : "browser";
+    addLog("info", `Runtime initialized in ${modeLabel} mode.`);
     refreshPorts().catch(() => undefined);
     refreshStatus().catch(() => undefined);
   }, [addLog, mode, refreshPorts, refreshStatus]);
+
+  useEffect(() => {
+    if (mode !== "cloud") {
+      return;
+    }
+
+    const link = new WebSerialLink({
+      onTelemetry: (next) => setTelemetry(normalizeTelemetryState(next)),
+      onStatus: (next) => setStatus(next),
+      onOpen: () => {
+        setWsConnected(true);
+        setError(null);
+        addLog("success", "Serial device opened via Web Serial.");
+      },
+      onClose: (reason) => {
+        setWsConnected(false);
+        activeConnectionRef.current = null;
+        addLog("warning", `Serial link closed: ${reason}`);
+      }
+    });
+    webSerialLinkRef.current = link;
+
+    return () => {
+      webSerialLinkRef.current = null;
+      void link.disconnect("Leaving the dashboard.");
+    };
+  }, [addLog, mode]);
 
   useEffect(() => {
     statusRef.current = status;
@@ -271,7 +348,7 @@ export function useTelemetry() {
         warningStateRef.current.noMavlinkPackets = true;
         addLog(
           "warning",
-          `Serial bytes are arriving on ${connection.path}, but no telemetry frames were parsed. For TX16S telem mirror use 420000 baud; for direct FC USB try 115200 or 460800.`
+          `Serial bytes are arriving on ${connection.path}, but no telemetry frames were parsed. For TX16S telem mirror use 420000 baud (CRSF). For direct FC MAVLink USB try 115200 or 460800.`
         );
       }
     }, 1000);
@@ -280,7 +357,9 @@ export function useTelemetry() {
   }, [addLog]);
 
   useEffect(() => {
-    if (mode === "desktop") {
+    // The WebSocket transport is only for the Node-server "web" runtime.
+    // Desktop uses the Tauri event bridge; cloud uses the Web Serial link.
+    if (mode !== "web") {
       return;
     }
 

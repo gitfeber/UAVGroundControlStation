@@ -1,6 +1,6 @@
 # UAV Ground Control Station
 
-Local ground control for UAVs. One React dashboard talks to either a native desktop link (CRSF + MAVLink) or a browser dev stack (MAVLink-only Node backend).
+Local ground control for UAVs. One React dashboard talks to a native desktop link (CRSF + MAVLink), a browser dev stack (MAVLink-only Node backend), or a hosted browser SPA reading the radio directly over Web Serial (MAVLink-only, no server).
 
 ## Language
 
@@ -11,8 +11,16 @@ The active serial connection between the GCS and the aircraft path (TX16S USB mi
 _Avoid_: Port, COM line (unless discussing OS device names)
 
 **Runtime mode**:
-Which host process owns the serial port and parsers: `desktop` (Tauri/Rust, canonical for TX16S/CRSF) or `web` (browser UI + Node server, MAVLink dev/fallback).
+Which host process owns the serial port and parsers: `desktop` (Tauri/Rust, canonical for TX16S/CRSF), `web` (browser UI + Node server, MAVLink dev/fallback), or `cloud` (browser SPA, MAVLink-only, no Node server — reads the radio directly via the Web Serial API; Chromium- and HTTPS-only). `cloud` is selected by the build flag `VITE_LINK=webserial`; see ADR 0006. Internal code and ADRs use the key `cloud`; operator-facing copy uses **Hosted Web App** instead.
 _Avoid_: App mode, client type
+
+**Hosted Web App**:
+The operator-facing name for runtime mode `cloud` — a zero-install browser GCS served over HTTPS where the operator's machine owns the USB radio via Web Serial. Not a telemetry-upload service; the hosted site delivers only the static app shell.
+_Avoid_: Cloud app, cloud GCS, SaaS (in operator-facing copy without the privacy line)
+
+**Hosted privacy line**:
+The canonical trust statement paired with every **Hosted Web App** mention in UI, docs, and the landing page: "Telemetry stays in your browser." Use it wherever operators might infer that flight data is sent to the host.
+_Avoid_: Cloud privacy, data policy (too generic)
 
 **CRSF-first port**:
 A serial session where CRSF frames are detected first; MAVLink may arrive only inside CRSF passthrough frames (typical TX16S telem mirror at 420000 baud).
@@ -164,6 +172,7 @@ _Avoid_: Demo data, test mode
 |-----------|-----------|--------|
 | `mavlinkPackets` in API types | Keep field name; means parsed telemetry frames | Renaming is a breaking shared-type change |
 | "browser-based GCS" in README | Product shell is desktop-first; browser stack is dev/fallback | See ADR 0001 |
+| "Cloud" in operator-facing copy | **Hosted Web App** + **Hosted privacy line** | Internal runtime key stays `cloud`; ADR/code unchanged |
 
 ## Example dialogue
 
@@ -178,3 +187,7 @@ _Avoid_: Demo data, test mode
 **Operator:** Serial linked only.
 
 **Dev:** Raw bytes but no frames usually means wrong baud. For a CRSF-first port use 420000; direct FC USB is often 115200 or 460800. Check frame message stats in the activity log once telemetry flows.
+
+**Operator:** I opened the Hosted Web App at uavgroundcontrolstation.com — does my GPS go to your server?
+
+**Dev:** No. Telemetry stays in your browser. The hosted site is only the app shell; Web Serial reads your local USB radio. We never receive GPS or flight data in v1.

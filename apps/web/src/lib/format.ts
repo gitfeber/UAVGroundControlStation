@@ -3,6 +3,13 @@ export function formatNumber(value: number | null | undefined, digits = 1, suffi
   return `${value.toFixed(digits)}${suffix}`;
 }
 
+/** CRSF remaining-% is 0–100; ignore invalid/out-of-range values for display. */
+export function clampBatteryPercent(value: number | null | undefined): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  if (value < 0 || value > 100) return null;
+  return value;
+}
+
 export function formatInteger(value: number | null | undefined, suffix = ""): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return "--";
   return `${Math.round(value)}${suffix}`;

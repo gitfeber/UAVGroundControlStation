@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { TelemetryState } from "@uav-ground-control-station/shared";
 import type { AlertItem } from "../lib/alerts";
-import { elapsedTime, formatInteger, formatNumber, percentageColor } from "../lib/format";
+import { clampBatteryPercent, elapsedTime, formatInteger, formatNumber, percentageColor } from "../lib/format";
 import { sensorHealthSummary } from "../lib/sensorHealth";
 import { defaultSidebarOrder, loadSidebarOrder, saveSidebarOrder, type SidebarCardId } from "../lib/sidebarCardOrder";
 import type { PreflightHealth } from "../lib/preflight";
@@ -28,7 +28,7 @@ interface TelemetrySidebarProps {
 export function TelemetrySidebar({ telemetry, distanceFromHome, alerts, preflight, targetEstimation }: TelemetrySidebarProps) {
   const [view, setView] = useState<SidebarView>(() => readSidebarView());
   const [cardOrder, setCardOrder] = useState<SidebarCardId[]>(() => loadSidebarOrder());
-  const batteryPercent = telemetry.battery.remainingPercent;
+  const batteryPercent = clampBatteryPercent(telemetry.battery.remainingPercent);
   const sensorSummary = sensorHealthSummary(telemetry);
 
   useEffect(() => {

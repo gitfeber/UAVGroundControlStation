@@ -1,7 +1,8 @@
 name: Branch Checks
 
-# Validation-only pipeline for pull requests: typecheck, lint, tests, and a
-# build/cargo test — but NEVER a release. Use this to confirm a branch is green
+# Validation-only pipeline for pull requests: typecheck, lint, tests, build,
+# build:cloud (Hosted Web App), and cargo test — but NEVER a release. Use this
+# to confirm a branch is green
 # before merging to main. Releases live in ci.yml (main) and release.yml (tags).
 on:
   pull_request:
@@ -46,6 +47,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
+      - run: pnpm build:cloud
 
   rust:
     runs-on: ubuntu-22.04

@@ -8,6 +8,7 @@
     "dev": "vite --host 0.0.0.0 --port 5173",
     "prebuild": "pnpm --filter @uav-ground-control-station/shared build && pnpm --filter @uav-ground-control-station/target-estimation build",
     "build": "tsc -p tsconfig.json && vite build",
+    "build:cloud": "pnpm run prebuild && tsc -p tsconfig.json && vite build --mode cloud",
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview --host 0.0.0.0 --port 5173",

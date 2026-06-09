@@ -3,24 +3,10 @@ import mavlink from "node-mavlink";
 import type { MavLinkPacket } from "node-mavlink";
 import { SerialPort } from "serialport";
 import type { BackendStatus, ConnectRequest, SerialPortInfo, TelemetryState } from "@uav-ground-control-station/shared";
-import { TelemetryStore } from "./telemetryState.js";
+import { TelemetryStore, applyMavlinkFrame } from "@uav-ground-control-station/shared";
 
 const defaultBaudRate = 460800;
 const { createMavLinkStream } = mavlink as typeof import("node-mavlink");
-
-const messageIds = {
-  heartbeat: 0,
-  sysStatus: 1,
-  gpsRawInt: 24,
-  attitude: 30,
-  globalPositionInt: 33,
-  navControllerOutput: 62,
-  rcChannels: 65,
-  vfrHud: 74,
-  radioStatus: 109,
-  batteryStatus: 147,
-  statusText: 253
-} as const;
 
 export class SerialMavlinkService extends EventEmitter {
   private readonly store = new TelemetryStore();
@@ -157,47 +143,12 @@ export class SerialMavlinkService extends EventEmitter {
   }
 
   private applyPacket(packet: MavLinkPacket): void {
-    const payload = dataViewFromBuffer(packet.payload);
-    this.store.markPacket(packet.header.sysid, packet.header.compid);
-
-    switch (packet.header.msgid) {
-      case messageIds.heartbeat:
-        this.store.updateHeartbeat(payload);
-        break;
-      case messageIds.sysStatus:
-        this.store.updateSysStatus(payload);
-        break;
-      case messageIds.batteryStatus:
-        this.store.updateBatteryStatus(payload);
-        break;
-      case messageIds.gpsRawInt:
-        this.store.updateGpsRawInt(payload);
-        break;
-      case messageIds.globalPositionInt:
-        this.store.updateGlobalPositionInt(payload);
-        break;
-      case messageIds.vfrHud:
-        this.store.updateVfrHud(payload);
-        break;
-      case messageIds.attitude:
-        this.store.updateAttitude(payload);
-        break;
-      case messageIds.radioStatus:
-        this.store.updateRadioStatus(payload);
-        break;
-      case messageIds.rcChannels:
-        this.store.updateRcChannels(payload);
-        break;
-      case messageIds.statusText:
-        this.store.updateStatusText(payload);
-        break;
-      case messageIds.navControllerOutput:
-        this.store.updateNavControllerOutput(payload);
-        break;
-      default:
-        break;
-    }
-
+    applyMavlinkFrame(this.store, {
+      sysid: packet.header.sysid,
+      compid: packet.header.compid,
+      msgid: packet.header.msgid,
+      payload: dataViewFromBuffer(packet.payload)
+    });
     this.emitTelemetry();
   }
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { appVersionLabel } from "../lib/appVersion";
 
 // Future improvement: replace in-app desktop splash with a dedicated transparent
 // frameless Tauri splash window that closes when the main webview is ready.
@@ -209,6 +210,7 @@ export function SplashScreen({ onDone, enabled = true }: SplashScreenProps) {
         <div className={`splash-brand ${brandVisible ? "splash-brand--visible" : ""}`}>
           <h1 className="splash-title">UAV</h1>
           <p className="splash-subtitle">Ground Control Station</p>
+          <p className="splash-version">{appVersionLabel()}</p>
           <div className="splash-brand-divider" aria-hidden="true">
             <span />
             <span />

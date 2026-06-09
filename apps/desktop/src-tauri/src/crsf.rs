@@ -111,19 +111,25 @@ pub fn crsf_message_label(frame_type: u8) -> String {
         0x1E => "CRSF Attitude".to_string(),
         0x1F => "CRSF MAVLink FC".to_string(),
         0x21 => "CRSF Flight Mode".to_string(),
-        0x3A => "CRSF ELRS Ext".to_string(),
-        0x7A => "CRSF ArduPilot Passthrough".to_string(),
-        0x80 => "CRSF MAVLink Passthrough".to_string(),
+        0x3A => "CRSF Handset".to_string(),
+        0x7F => "CRSF ArduPilot Telem (legacy)".to_string(),
+        0x7A => "CRSF MSP Req".to_string(),
+        0x80 => "CRSF ArduPilot Telem".to_string(),
         other => format!("CRSF 0x{other:02X}"),
     }
 }
 
 pub fn is_mavlink_passthrough(frame_type: u8) -> bool {
-    matches!(frame_type, 0x3A | 0x7A | 0x80)
+    // ArduPilot/ELRS use 0x7F/0x80 for FrSky passthrough telemetry, not raw MAVLink.
+    let _ = frame_type;
+    false
 }
 
 pub fn apply_crsf_frame(telemetry: &mut TelemetryState, frame: &CrsfFrame) {
     mark_crsf_packet(telemetry);
+    if is_passthrough_host_frame(frame.frame_type) {
+        apply_passthrough_payload(telemetry, &frame.payload);
+    }
 
     match frame.frame_type {
         0x02 => update_gps(telemetry, &frame.payload),
@@ -145,48 +151,75 @@ fn mark_crsf_packet(telemetry: &mut TelemetryState) {
     telemetry.vehicle.r#type = "TX16S CRSF".to_string();
 }
 
+fn scaled_crsf_coordinate(raw: Option<i32>) -> Option<f64> {
+    let value = raw?;
+    if value == 0 || value == i32::MAX || value == i32::MIN {
+        return None;
+    }
+    Some(value as f64 / 10_000_000.0)
+}
+
 fn update_gps(telemetry: &mut TelemetryState, payload: &[u8]) {
     if payload.len() < 15 {
         return;
     }
 
-    let lat = read_i32_be(payload, 0).map(|value| value as f64 / 10_000_000.0);
-    let lon = read_i32_be(payload, 4).map(|value| value as f64 / 10_000_000.0);
-    let speed_kmh = read_u16_be(payload, 8).map(|value| value as f64 / 10.0);
-    let heading = read_u16_be(payload, 10).map(|value| value as f64 / 100.0);
-    let alt_m = read_u16_be(payload, 12).map(|value| value as f64 - 1000.0);
+    let lat = scaled_crsf_coordinate(read_i32_be(payload, 0));
+    let lon = scaled_crsf_coordinate(read_i32_be(payload, 4));
+    let speed_kmh = read_u16_be(payload, 8);
+    let heading = read_u16_be(payload, 10);
+    let alt_m = read_u16_be(payload, 12);
     let satellites = payload.get(14).copied();
+    let sats = satellites.filter(|value| *value != 255);
+    let has_position_fix = sats.map(|value| value >= 3).unwrap_or(false);
 
-    if let Some(lat) = lat {
-        telemetry.position.lat = Some(lat);
-    }
-    if let Some(lon) = lon {
-        telemetry.position.lon = Some(lon);
-    }
-    if let Some(heading) = heading {
-        telemetry.position.heading_deg = Some(heading);
-        telemetry.position.ground_course_deg = Some(heading);
-    }
-    if let Some(alt_m) = alt_m {
-        telemetry.position.relative_alt = Some(alt_m);
-        telemetry.position.alt_msl = Some(alt_m);
-    }
-    if let Some(speed_kmh) = speed_kmh {
-        telemetry.motion.ground_speed = Some(speed_kmh / 3.6);
-    }
-    if let Some(heading) = heading {
-        telemetry.motion.yaw_deg = Some(heading);
-    }
-    if let Some(sats) = satellites {
+    if let Some(sats) = sats {
         telemetry.gps.satellites = Some(sats);
-        telemetry.gps.fix_type = Some(if sats >= 6 { 3 } else if sats >= 3 { 2 } else { 1 });
+        telemetry.gps.fix_type = Some(if sats >= 6 {
+            3
+        } else if sats >= 3 {
+            2
+        } else if sats > 0 {
+            1
+        } else {
+            0
+        });
         telemetry.gps.fix_label = if sats >= 6 {
             "3D Fix".to_string()
         } else if sats >= 3 {
             "2D Fix".to_string()
-        } else {
+        } else if sats > 0 {
             "No Fix".to_string()
+        } else {
+            "No GPS".to_string()
         };
+    }
+
+    // ArduPilot still emits CRSF GPS frames without a GNSS module; ignore lat/lon until sats >= 3.
+    if !has_position_fix {
+        return;
+    }
+
+    if let (Some(lat), Some(lon)) = (lat, lon) {
+        telemetry.position.lat = Some(lat);
+        telemetry.position.lon = Some(lon);
+    } else {
+        return;
+    }
+
+    if let Some(heading) = heading.filter(|value| *value != 65535) {
+        let heading_deg = heading as f64 / 100.0;
+        telemetry.position.heading_deg = Some(heading_deg);
+        telemetry.position.ground_course_deg = Some(heading_deg);
+        telemetry.motion.yaw_deg = Some(heading_deg);
+    }
+    if let Some(alt_m) = alt_m.filter(|value| *value != 65535) {
+        let altitude = alt_m as f64 - 1000.0;
+        telemetry.position.relative_alt = Some(altitude);
+        telemetry.position.alt_msl = Some(altitude);
+    }
+    if let Some(speed_kmh) = speed_kmh.filter(|value| *value != 65535) {
+        telemetry.motion.ground_speed = Some(speed_kmh as f64 / 10.0 / 3.6);
     }
 }
 
@@ -205,22 +238,111 @@ fn update_battery(telemetry: &mut TelemetryState, payload: &[u8]) {
         return;
     }
 
-    let voltage = read_u16_be(payload, 0).map(|value| value as f64 / 10.0);
-    let current = read_u16_be(payload, 2).map(|value| value as f64 / 10.0);
-    let consumed = read_u24_be(payload, 4).map(|value| value as i32);
-    let remaining = payload.get(7).copied().map(|value| value as i8);
+    let voltage_raw = read_u16_be(payload, 0);
+    let current_raw = read_u16_be(payload, 2);
+    let consumed = normalize_crsf_consumed_mah(read_u24_be(payload, 4));
+    let remaining = normalize_crsf_battery_remaining(payload.get(7).copied());
 
-    if let Some(voltage) = voltage {
-        telemetry.battery.voltage = Some(voltage);
+    if let Some(voltage_raw) = voltage_raw.filter(|value| is_valid_crsf_battery_u16(*value)) {
+        crate::set_voltage(telemetry, Some(voltage_raw as f64 / 10.0));
     }
-    if let Some(current) = current {
-        telemetry.battery.current = Some(current);
+    if let Some(current_raw) = current_raw.filter(|value| is_valid_crsf_battery_u16(*value)) {
+        crate::set_current(telemetry, Some(current_raw as f64 / 10.0));
     }
     if let Some(consumed) = consumed {
         telemetry.battery.consumed_mah = Some(consumed);
     }
     if let Some(remaining) = remaining {
         telemetry.battery.remaining_percent = Some(remaining);
+    }
+}
+
+const SUBTYPE_SINGLE_PASSTHROUGH: u8 = 0xF0;
+const SUBTYPE_MULTI_PASSTHROUGH: u8 = 0xF2;
+const APPID_BATT_1: u16 = 0x5003;
+const APPID_BATT_2: u16 = 0x5008;
+
+fn is_passthrough_host_frame(frame_type: u8) -> bool {
+    frame_type == 0x7F || frame_type == 0x80 || frame_type == 0x3A
+}
+
+fn is_valid_crsf_battery_u16(value: u16) -> bool {
+    value > 0 && value != 0x7FFF
+}
+
+fn normalize_crsf_battery_remaining(raw: Option<u8>) -> Option<i8> {
+    let value = raw?;
+    let signed = value as i8;
+    if signed < 0 || signed > 100 {
+        return None;
+    }
+    Some(signed)
+}
+
+fn normalize_crsf_consumed_mah(raw: Option<u32>) -> Option<i32> {
+    let value = raw?;
+    if value >= 0x7FFF {
+        return None;
+    }
+    Some(value as i32)
+}
+
+pub fn apply_passthrough_payload(telemetry: &mut TelemetryState, payload: &[u8]) {
+    if payload.is_empty() {
+        return;
+    }
+
+    apply_passthrough_at(telemetry, payload, 0);
+}
+
+fn apply_passthrough_at(telemetry: &mut TelemetryState, payload: &[u8], offset: usize) {
+    if offset >= payload.len() {
+        return;
+    }
+
+    let sub_type = payload[offset];
+    if sub_type == SUBTYPE_SINGLE_PASSTHROUGH && offset + 7 <= payload.len() {
+        let appid = read_u16_le(payload, offset + 1).unwrap_or(0);
+        let data = read_u32_le(payload, offset + 3).unwrap_or(0);
+        apply_passthrough_packet(telemetry, appid, data);
+        return;
+    }
+
+    if sub_type == SUBTYPE_MULTI_PASSTHROUGH && offset + 2 <= payload.len() {
+        let count = payload[offset + 1] as usize;
+        let mut pos = offset + 2;
+        for _ in 0..count {
+            if pos + 6 > payload.len() {
+                break;
+            }
+            let appid = read_u16_le(payload, pos).unwrap_or(0);
+            let data = read_u32_le(payload, pos + 2).unwrap_or(0);
+            apply_passthrough_packet(telemetry, appid, data);
+            pos += 6;
+        }
+    }
+}
+
+fn apply_passthrough_packet(telemetry: &mut TelemetryState, appid: u16, data: u32) {
+    match appid {
+        APPID_BATT_1 | APPID_BATT_2 => apply_passthrough_battery(telemetry, data),
+        _ => {}
+    }
+}
+
+fn apply_passthrough_battery(telemetry: &mut TelemetryState, data: u32) {
+    let voltage_raw = data & 0x1FF;
+    let current_raw = (data >> 9) & 0x7F;
+    let consumed_mah = (data >> 17) & 0x7FFF;
+
+    if voltage_raw > 0 {
+        crate::set_voltage(telemetry, Some(voltage_raw as f64 / 10.0));
+    }
+    if current_raw > 0 {
+        crate::set_current(telemetry, Some(current_raw as f64 / 10.0));
+    }
+    if consumed_mah > 0 && consumed_mah < 0x7FFF {
+        telemetry.battery.consumed_mah = Some(consumed_mah as i32);
     }
 }
 
@@ -390,6 +512,16 @@ fn read_u24_be(data: &[u8], offset: usize) -> Option<u32> {
 fn read_u32_be(data: &[u8], offset: usize) -> Option<u32> {
     let bytes = data.get(offset..offset + 4)?;
     Some(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+fn read_u16_le(data: &[u8], offset: usize) -> Option<u16> {
+    let bytes = data.get(offset..offset + 2)?;
+    Some(u16::from_le_bytes([bytes[0], bytes[1]]))
+}
+
+fn read_u32_le(data: &[u8], offset: usize) -> Option<u32> {
+    let bytes = data.get(offset..offset + 4)?;
+    Some(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
 }
 
 #[cfg(test)]

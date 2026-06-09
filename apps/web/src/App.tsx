@@ -13,6 +13,7 @@ import { VideoPanel } from "./components/VideoPanel";
 import { ActivityLogPanel } from "./components/ActivityLogPanel";
 import { ReplaySimPanel } from "./components/ReplaySimPanel";
 import { SplashScreen } from "./components/SplashScreen";
+import { webSerialUnsupportedReason } from "./link/webSerialSupport";
 
 const ENABLE_SPLASH_SCREEN = import.meta.env.VITE_ENABLE_SPLASH_SCREEN !== "false";
 
@@ -45,6 +46,10 @@ export function App() {
   const [home, setHome] = useState<Coordinate | null>(null);
   const coordinate = validCoordinate(telemetry.position?.lat, telemetry.position?.lon);
   const isControlledTrack = activeSourceMode !== "live";
+  const cloudUnsupported = useMemo(
+    () => (runtimeMode === "cloud" ? webSerialUnsupportedReason() : null),
+    [runtimeMode]
+  );
 
   useEffect(() => {
     if (!home && coordinate) {
@@ -102,6 +107,8 @@ export function App() {
           onStopLogging={stopLogging}
         />
 
+        {cloudUnsupported && <CloudUnsupportedBanner reason={cloudUnsupported} />}
+
         {activeSourceMode !== "live" && <NonLiveBanner mode={activeSourceMode} />}
 
         <div className={`relative flex min-h-0 flex-1 ${dashboardTint(activeSourceMode)}`}>
@@ -140,6 +147,14 @@ export function App() {
       </div>
       {showSplash && <SplashScreen onDone={() => setShowSplash(false)} />}
     </>
+  );
+}
+
+function CloudUnsupportedBanner({ reason }: { reason: string }) {
+  return (
+    <div className="shrink-0 border-b border-red-400/40 bg-red-500/10 px-4 py-2 text-center text-xs font-semibold text-red-100">
+      Web Serial unavailable — {reason}
+    </div>
   );
 }
 
