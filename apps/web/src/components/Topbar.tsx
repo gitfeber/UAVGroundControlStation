@@ -5,6 +5,7 @@ import type {
   SerialPortInfo,
   TelemetrySourceMode
 } from "@uav-ground-control-station/shared";
+import { appVersionLabel } from "../lib/appVersion";
 import { Badge } from "./Panel";
 
 const baudRates = [57600, 115200, 420000, 460800];
@@ -90,8 +91,13 @@ export function Topbar({
     <header className="relative z-20 shrink-0 border-b border-cyan-300/10 bg-slate-950/92 px-3 py-2 shadow-glow backdrop-blur sm:px-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="min-w-0 shrink">
-          <div className="truncate text-[10px] uppercase tracking-[0.28em] text-cyan-300/80 sm:text-[11px] sm:tracking-[0.32em]">
-            {isCloud ? "Hosted Web App" : "Local GCS"}
+          <div className="flex min-w-0 items-baseline gap-2">
+            <div className="truncate text-[10px] uppercase tracking-[0.28em] text-cyan-300/80 sm:text-[11px] sm:tracking-[0.32em]">
+              {isCloud ? "Hosted Web App" : "Local GCS"}
+            </div>
+            <span className="shrink-0 font-mono text-[10px] font-medium text-cyan-300/55 sm:text-[11px]">
+              {appVersionLabel()}
+            </span>
           </div>
           <h1 className="truncate text-base font-semibold tracking-wide text-slate-50 sm:text-lg">
             <span className="xl:hidden">UAV GCS</span>

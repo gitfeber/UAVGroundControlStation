@@ -309,6 +309,15 @@ button:disabled {
   text-transform: uppercase;
 }
 
+.splash-version {
+  margin: 0.65rem 0 0;
+  color: rgba(103, 232, 249, 0.72);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
 .splash-brand-divider {
   display: flex;
   align-items: center;
