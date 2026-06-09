@@ -4,6 +4,8 @@
 
 A local ground control station for UAVs — map, telemetry, and serial link in one dashboard.
 
+**Website:** [uavgroundcontrolstation.com](https://uavgroundcontrolstation.com) · **Hosted Web App:** [app.uavgroundcontrolstation.com](https://app.uavgroundcontrolstation.com)
+
 ![Runtime](https://img.shields.io/badge/runtime-Desktop%20%7C%20Browser%20%7C%20Hosted-lightgrey)
 ![TypeScript](https://img.shields.io/badge/TypeScript-monorepo-3178c6)
 
@@ -17,7 +19,7 @@ A local ground control station for UAVs — map, telemetry, and serial link in o
 |---------|----------|-----------|---------------|
 | **Desktop** (Tauri, recommended) | Primary operator runtime, TX16S, Windows `COM*` | CRSF + MAVLink, GCS wake-up | Native Rust |
 | **Browser + Node** | Development, MAVLink-direct links | MAVLink | `apps/server` (fallback) |
-| **Hosted Web App** (`VITE_LINK=webserial`) | Zero-install browser GCS, self-host or third-party hosting | CRSF + MAVLink (no wake-up bytes) | Web Serial API (Chromium + HTTPS only) |
+| **Hosted Web App** (`VITE_LINK=webserial`) | Zero-install browser GCS — [app.uavgroundcontrolstation.com](https://app.uavgroundcontrolstation.com) or self-host | CRSF + MAVLink (no wake-up bytes) | Web Serial API (Chromium + HTTPS only) |
 
 For **RadioMaster TX16S** with a USB telemetry mirror, the **desktop app** remains the canonical runtime (420000 baud, CRSF-first, GCS wake-up). The **Hosted Web App** also supports TX16S CRSF at **420000** baud for zero-install use. See [`docs/adr/0001-dual-runtime-desktop-canonical.md`](docs/adr/0001-dual-runtime-desktop-canonical.md).
 
@@ -35,6 +37,15 @@ The **Hosted Web App** (internal runtime key `cloud`) is a pure browser SPA that
 
 Self-host the Hosted Web App with `pnpm build:cloud` and serve **`apps/web/dist` from that command only** — not the output of `pnpm build` (desktop/Node stack). A wrong artifact shows the COM port dropdown and spams `WebSocket connection to …/ws failed` because the app is in `web` mode instead of `cloud`. Do not embed the app in a cross-origin iframe without a `Permissions-Policy` that allows `serial` for your origin — Web Serial is blocked by default in embedded contexts.
 
+## Website
+
+| URL | What you get |
+|-----|--------------|
+| [uavgroundcontrolstation.com](https://uavgroundcontrolstation.com) | Product landing page — features, runtimes, safety, links to GitHub and the Hosted Web App |
+| [app.uavgroundcontrolstation.com](https://app.uavgroundcontrolstation.com) | **Hosted Web App** — zero-install Web Serial GCS in Chromium over HTTPS. Telemetry stays in your browser; no account required in v1 |
+
+Prefer zero install? Open the Hosted Web App, grant serial access when prompted, and connect at **420000** baud for TX16S CRSF or **115200** / **460800** for direct FC MAVLink USB. For ground-target estimation with GeoTIFF DEM ray marching, use the **desktop app** ([Releases](https://github.com/gitfeber/UAVGroundControlStation/releases)).
+
 ## Safety
 
 This project is experimental ground-control software. Do not use it for unsafe, unsupervised, or illegal UAV operation. Always follow local regulations, manufacturer guidance, and safe test procedures.
@@ -47,7 +58,9 @@ Prefer bench testing and disconnected telemetry validation before using the soft
 - **Telemetry sidebar** — **Text** or **Inst** (mini gauges with the same telemetry fields as text mode); drag card headers (⠿) to reorder (shared order for both views, stored in `uav-gcs.sidebar.order`); **Reset** restores recommended flight-priority order; alerts stay fixed at the top
 - **Serial link** — port picker (USB/PNP preferred), manual path entry, common baud rates
 - **Activity log** — connection status, parser stats, frame message stats
-- **Optional video stream** (MJPEG, etc.) via environment variables
+- **Optional video stream** (MJPEG, etc.) via environment variables; crosshair overlay for ground-target estimation
+- **Ground target estimation** (desktop) — image-center target with GeoTIFF DEM ray marching, map marker, line-of-sight, and sample-log export
+- **Preflight health advisory** — sensor and link health checks with configurable thresholds
 - **Session logging** and reset for new flights
 - **Replay & Simulation** — frontend-only, read-only telemetry sources that drive the same dashboard without hardware: replay recorded `.jsonl`/`.json` logs (start/pause/seek/step, speed and timing modes) or run deterministic seeded simulations. See [`docs/replay-mode.md`](docs/replay-mode.md) and [`docs/adr/0003-frontend-only-replay-simulation.md`](docs/adr/0003-frontend-only-replay-simulation.md)
 - **Shared data model** [`TelemetryState`](packages/shared/src/index.ts) for desktop and browser
@@ -77,10 +90,11 @@ React operator dashboard
 **Monorepo layout:**
 
 ```text
-packages/shared     Shared types & TelemetryState
-apps/web            React + Vite + Tailwind + MapLibre (shared UI)
-apps/desktop        Tauri v2 + Rust (CRSF/MAVLink, COM*, wake-up)  ← canonical
-apps/server         Fastify + WebSocket + serialport (MAVLink, dev/fallback)
+packages/shared              Shared types & TelemetryState
+packages/target-estimation   Ground-target ray marching & sample log (TS)
+apps/web                     React + Vite + Tailwind + MapLibre (shared UI)
+apps/desktop                 Tauri v2 + Rust (CRSF/MAVLink, COM*, wake-up, DEM)  ← canonical
+apps/server                  Fastify + WebSocket + serialport (MAVLink, dev/fallback)
 ```
 
 Domain language and terms: [`CONTEXT.md`](CONTEXT.md).
@@ -93,6 +107,14 @@ Domain language and terms: [`CONTEXT.md`](CONTEXT.md).
 - **Windows:** run maintenance commands (`pnpm install`, `lint`, `typecheck`) in **WSL**; run **Tauri dev/build** for real `COM*` hardware in **Windows PowerShell**
 
 ## Quick start
+
+### Try online (no install)
+
+1. Open the **Hosted Web App:** [app.uavgroundcontrolstation.com](https://app.uavgroundcontrolstation.com)
+2. Use a Chromium-based browser over HTTPS, click **Connect**, and grant Web Serial access to your radio.
+3. Set **420000** baud for TX16S CRSF telem mirror or **115200** / **460800** for direct FC MAVLink USB.
+
+Product overview and desktop download links: [uavgroundcontrolstation.com](https://uavgroundcontrolstation.com).
 
 ### Repository
 
@@ -150,6 +172,8 @@ pnpm dev
 - Frontend: `http://localhost:5173`
 
 ### Hosted Web App (build & self-host)
+
+The public instance at [app.uavgroundcontrolstation.com](https://app.uavgroundcontrolstation.com) is built from the same artifact. To self-host:
 
 Build the Web Serial SPA (no Node server in the output):
 
@@ -287,11 +311,12 @@ Both `ci.yml` and `release.yml` set `generateReleaseNotes: true`, so GitHub appe
 ## Project structure
 
 ```text
-apps/desktop/       Tauri + Rust (primary serial link)
-apps/server/        Node backend (dev/fallback)
-apps/web/           React dashboard
-packages/shared/    API and telemetry contracts
-docs/adr/           architecture decisions
+apps/desktop/              Tauri + Rust (primary serial link, DEM terrain)
+apps/server/               Node backend (dev/fallback)
+apps/web/                  React dashboard (desktop, browser dev, Hosted Web App)
+packages/shared/           API and telemetry contracts
+packages/target-estimation/  Ground-target estimation library
+docs/adr/                  architecture decisions
 ```
 
 ## License
