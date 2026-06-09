@@ -1,11 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Feature, FeatureCollection, LineString, Point } from "geojson";
 import type { TelemetryState, TargetEstimate } from "@uav-ground-control-station/shared";
 import type { Coordinate } from "../lib/geo";
 import { isValidLngLat, toMapLngLat } from "../lib/geo";
+import {
+  buildMapStyle,
+  isMapBasemapSwitcherEnabled,
+  loadMapBasemapId,
+  saveMapBasemapId,
+  type MapBasemapId
+} from "../lib/mapBasemaps";
 import { resolveHeadingDeg } from "../lib/resolveHeadingDeg";
 import type { TrackPoint } from "../replay/reconstruct";
 import { HudOverlay } from "./HudOverlay";
+import { MapBasemapSwitcher } from "./MapBasemapSwitcher";
 
 interface MapPanelProps {
   telemetry: TelemetryState;
@@ -22,16 +30,19 @@ interface MapPanelProps {
 
 type TrackFeature = Feature<LineString, Record<string, never>>;
 type PointCollection = FeatureCollection<Point, Record<string, never>>;
+type MapInstance = import("maplibre-gl").Map;
 
 const fallbackCenter: [number, number] = [10.4515, 51.1657];
 
 export function MapPanel({ telemetry, coordinate, home, groundTarget, controlledTrack, trackMode = "internal" }: MapPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<import("maplibre-gl").Map | null>(null);
-  const maplibreRef = useRef<typeof import("maplibre-gl") | null>(null);
+  const mapRef = useRef<MapInstance | null>(null);
   const centeredRef = useRef(false);
   const [mapReady, setMapReady] = useState(false);
+  const [styleEpoch, setStyleEpoch] = useState(0);
   const [track, setTrack] = useState<[number, number][]>([]);
+  const [basemapId, setBasemapId] = useState<MapBasemapId>(() => loadMapBasemapId());
+  const basemapSwitcherEnabled = isMapBasemapSwitcherEnabled();
 
   const isControlled = trackMode === "controlled";
   const droneLngLat = useMemo(() => toMapLngLat(coordinate), [coordinate]);
@@ -48,93 +59,42 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, controlled
 
   const heading = resolveHeadingDeg(telemetry) ?? 0;
 
+  const handleBasemapChange = useCallback((nextBasemapId: MapBasemapId) => {
+    setBasemapId(nextBasemapId);
+    saveMapBasemapId(nextBasemapId);
+
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+
+    map.setStyle(buildMapStyle(nextBasemapId));
+    map.once("style.load", () => {
+      addMapOverlays(map);
+      setStyleEpoch((epoch) => epoch + 1);
+    });
+  }, [mapReady]);
+
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
     let disposed = false;
-    let map: import("maplibre-gl").Map | null = null;
+    let map: MapInstance | null = null;
 
     const setup = async () => {
       const maplibregl = await import("maplibre-gl");
       if (disposed || !containerRef.current) return;
 
-      maplibreRef.current = maplibregl;
       map = new maplibregl.Map({
         container: containerRef.current,
-        style: mapStyle(),
+        style: buildMapStyle(loadMapBasemapId()),
         center: fallbackCenter,
         zoom: 5,
-        attributionControl: false
+        attributionControl: { compact: true }
       });
       mapRef.current = map;
 
       map.on("load", () => {
         if (!map) return;
-
-        map.addSource("track", { type: "geojson", data: trackFeature([]) });
-        map.addLayer({
-          id: "track-line",
-          type: "line",
-          source: "track",
-          paint: {
-            "line-color": "#22d3ee",
-            "line-width": 3,
-            "line-opacity": 0.9
-          }
-        });
-
-        map.addSource("drone", { type: "geojson", data: emptyPointCollection() });
-        map.addLayer({
-          id: "drone-point",
-          type: "circle",
-          source: "drone",
-          paint: {
-            "circle-radius": 9,
-            "circle-color": "#22d3ee",
-            "circle-stroke-width": 2,
-            "circle-stroke-color": "#0f172a"
-          }
-        });
-
-        map.addSource("home", { type: "geojson", data: emptyPointCollection() });
-        map.addLayer({
-          id: "home-point",
-          type: "circle",
-          source: "home",
-          paint: {
-            "circle-radius": 7,
-            "circle-color": "#fbbf24",
-            "circle-stroke-width": 2,
-            "circle-stroke-color": "#0f172a"
-          }
-        });
-
-        map.addSource("ground-target-los", { type: "geojson", data: emptyLineFeature() });
-        map.addLayer({
-          id: "ground-target-los-line",
-          type: "line",
-          source: "ground-target-los",
-          paint: {
-            "line-color": "#f97316",
-            "line-width": 2,
-            "line-opacity": 0.85,
-            "line-dasharray": [2, 2]
-          }
-        });
-
-        map.addSource("ground-target", { type: "geojson", data: emptyPointCollection() });
-        map.addLayer({
-          id: "ground-target-point",
-          type: "circle",
-          source: "ground-target",
-          paint: {
-            "circle-radius": 8,
-            "circle-color": "#f97316",
-            "circle-stroke-width": 2,
-            "circle-stroke-color": "#0f172a"
-          }
-        });
-
+        addMapOverlays(map);
         setMapReady(true);
       });
     };
@@ -148,13 +108,12 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, controlled
       setMapReady(false);
       map?.remove();
       mapRef.current = null;
-      maplibreRef.current = null;
       centeredRef.current = false;
     };
   }, []);
 
   useEffect(() => {
-    if (isControlled || !droneLngLat) return; // controlled track is owned by the replay controller
+    if (isControlled || !droneLngLat) return;
 
     setTrack((current) => {
       const last = current[current.length - 1];
@@ -172,7 +131,7 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, controlled
 
     const source = map.getSource("track") as import("maplibre-gl").GeoJSONSource | undefined;
     source?.setData(trackFeature(sanitizeTrack(displayTrack)));
-  }, [mapReady, displayTrack]);
+  }, [mapReady, styleEpoch, displayTrack]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -185,7 +144,7 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, controlled
       centeredRef.current = true;
       map.jumpTo({ center: droneLngLat, zoom: 15 });
     }
-  }, [droneLngLat, heading, mapReady]);
+  }, [droneLngLat, heading, mapReady, styleEpoch]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -193,7 +152,7 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, controlled
 
     const source = map.getSource("home") as import("maplibre-gl").GeoJSONSource | undefined;
     source?.setData(pointCollection(homeLngLat));
-  }, [homeLngLat, mapReady]);
+  }, [homeLngLat, mapReady, styleEpoch]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -223,11 +182,13 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, controlled
 
     targetSource?.setData(pointCollection(targetLngLat));
     losSource?.setData(lineFeature(droneLngLat, targetLngLat));
-  }, [groundTarget, droneLngLat, mapReady]);
+  }, [groundTarget, droneLngLat, mapReady, styleEpoch]);
 
   return (
     <main className="relative min-w-0 flex-1">
       <div ref={containerRef} className="h-full w-full bg-slate-950" />
+
+      {basemapSwitcherEnabled && <MapBasemapSwitcher value={basemapId} onChange={handleBasemapChange} />}
 
       <div className="pointer-events-none absolute bottom-6 left-1/2 z-10 -translate-x-1/2">
         <HudOverlay telemetry={telemetry} />
@@ -242,36 +203,84 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, controlled
   );
 }
 
-function sanitizeTrack(track: [number, number][]): [number, number][] {
-  return track.filter((point) => isValidLngLat(point[0], point[1]));
+function addMapOverlays(map: MapInstance): void {
+  if (!map.getSource("track")) {
+    map.addSource("track", { type: "geojson", data: trackFeature([]) });
+    map.addLayer({
+      id: "track-line",
+      type: "line",
+      source: "track",
+      paint: {
+        "line-color": "#22d3ee",
+        "line-width": 3,
+        "line-opacity": 0.9
+      }
+    });
+  }
+
+  if (!map.getSource("drone")) {
+    map.addSource("drone", { type: "geojson", data: emptyPointCollection() });
+    map.addLayer({
+      id: "drone-point",
+      type: "circle",
+      source: "drone",
+      paint: {
+        "circle-radius": 9,
+        "circle-color": "#22d3ee",
+        "circle-stroke-width": 2,
+        "circle-stroke-color": "#0f172a"
+      }
+    });
+  }
+
+  if (!map.getSource("home")) {
+    map.addSource("home", { type: "geojson", data: emptyPointCollection() });
+    map.addLayer({
+      id: "home-point",
+      type: "circle",
+      source: "home",
+      paint: {
+        "circle-radius": 7,
+        "circle-color": "#fbbf24",
+        "circle-stroke-width": 2,
+        "circle-stroke-color": "#0f172a"
+      }
+    });
+  }
+
+  if (!map.getSource("ground-target-los")) {
+    map.addSource("ground-target-los", { type: "geojson", data: emptyLineFeature() });
+    map.addLayer({
+      id: "ground-target-los-line",
+      type: "line",
+      source: "ground-target-los",
+      paint: {
+        "line-color": "#f97316",
+        "line-width": 2,
+        "line-opacity": 0.85,
+        "line-dasharray": [2, 2]
+      }
+    });
+  }
+
+  if (!map.getSource("ground-target")) {
+    map.addSource("ground-target", { type: "geojson", data: emptyPointCollection() });
+    map.addLayer({
+      id: "ground-target-point",
+      type: "circle",
+      source: "ground-target",
+      paint: {
+        "circle-radius": 8,
+        "circle-color": "#f97316",
+        "circle-stroke-width": 2,
+        "circle-stroke-color": "#0f172a"
+      }
+    });
+  }
 }
 
-function mapStyle(): import("maplibre-gl").StyleSpecification | string {
-  const styleUrl = import.meta.env.VITE_MAP_STYLE_URL;
-  if (styleUrl) return styleUrl;
-
-  const satelliteTileUrl = import.meta.env.VITE_SATELLITE_TILE_URL;
-  const tiles = satelliteTileUrl ? [satelliteTileUrl] : ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"];
-  const attribution = satelliteTileUrl ? "Satellite tiles" : "OpenStreetMap contributors";
-
-  return {
-    version: 8,
-    sources: {
-      basemap: {
-        type: "raster",
-        tiles,
-        tileSize: 256,
-        attribution
-      }
-    },
-    layers: [
-      {
-        id: "basemap",
-        type: "raster",
-        source: "basemap"
-      }
-    ]
-  };
+function sanitizeTrack(track: [number, number][]): [number, number][] {
+  return track.filter((point) => isValidLngLat(point[0], point[1]));
 }
 
 function trackFeature(track: [number, number][]): TrackFeature {
