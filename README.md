@@ -267,7 +267,7 @@ On the **desktop** link, gimbal attitude for estimation comes from MAVLink **285
 | `VITE_VIDEO_URL` / `VITE_VIDEO_KIND` | Optional: camera stream (e.g. MJPEG) |
 | `VITE_ENABLE_SPLASH_SCREEN` | Startup HUD splash overlay (default: enabled; set `false` to skip) |
 
-Server: `PORT` (default `3001`), `HOST` (default `127.0.0.1`) in `apps/server`. The server exposes **unauthenticated** serial-control endpoints; it binds loopback only. Setting `HOST` to a routable address (e.g. `0.0.0.0`) is a deliberate opt-in that lets any device on the network open or close the link to flight hardware — see [`docs/adr/0002-server-loopback-only.md`](docs/adr/0002-server-loopback-only.md).
+Server: `PORT` (default `3001`), `HOST` (default `127.0.0.1`) in `apps/server`. The server exposes **unauthenticated** serial-control endpoints; it binds loopback only. Setting `HOST` to a routable address (e.g. `0.0.0.0`) is a deliberate opt-in that lets any device on the network open or close the link to flight hardware — see [`docs/adr/0002-server-loopback-only.md`](docs/adr/0002-server-loopback-only.md). `POST /api/connect` validates serial `path` against plausible device patterns only (Windows `COM*`, macOS `/dev/cu.*`/`/dev/tty.*`, Linux `tty*`, `/dev/serial/by-id|by-path/*`, `/dev/rfcomm*`) and `baudRate` (57600, 115200, 420000, 460800) before opening the port; malformed requests return HTTP 400.
 
 ## Development
 

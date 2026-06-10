@@ -9,3 +9,4 @@ logs/*.jsonl
 .env
 .env.*
 !.env.example
+handoff.md
