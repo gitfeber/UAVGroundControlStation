@@ -13,6 +13,7 @@ import { VideoPanel } from "./components/VideoPanel";
 import { ActivityLogPanel } from "./components/ActivityLogPanel";
 import { ReplaySimPanel } from "./components/ReplaySimPanel";
 import { SplashScreen } from "./components/SplashScreen";
+import { getRemoteSerialControlApiBanner } from "./lib/apiSafety";
 import { webSerialUnsupportedReason } from "./link/webSerialSupport";
 
 const ENABLE_SPLASH_SCREEN = import.meta.env.VITE_ENABLE_SPLASH_SCREEN !== "false";
@@ -50,6 +51,16 @@ export function App() {
     () => (runtimeMode === "cloud" ? webSerialUnsupportedReason() : null),
     [runtimeMode]
   );
+  const remoteSerialControlApiBanner = useMemo(() => {
+    if (runtimeMode !== "web") {
+      return null;
+    }
+    return getRemoteSerialControlApiBanner(
+      import.meta.env.VITE_API_BASE_URL,
+      import.meta.env.VITE_WS_URL,
+      typeof window !== "undefined" ? window.location.origin : "http://localhost"
+    );
+  }, [runtimeMode]);
 
   useEffect(() => {
     if (!home && coordinate) {
@@ -109,6 +120,8 @@ export function App() {
 
         {cloudUnsupported && <CloudUnsupportedBanner reason={cloudUnsupported} />}
 
+        {remoteSerialControlApiBanner && <RemoteSerialControlApiBanner message={remoteSerialControlApiBanner} />}
+
         {activeSourceMode !== "live" && <NonLiveBanner mode={activeSourceMode} />}
 
         <div className={`relative flex min-h-0 flex-1 ${dashboardTint(activeSourceMode)}`}>
@@ -154,6 +167,14 @@ function CloudUnsupportedBanner({ reason }: { reason: string }) {
   return (
     <div className="shrink-0 border-b border-red-400/40 bg-red-500/10 px-4 py-2 text-center text-xs font-semibold text-red-100">
       Web Serial unavailable — {reason}
+    </div>
+  );
+}
+
+function RemoteSerialControlApiBanner({ message }: { message: string }) {
+  return (
+    <div className="shrink-0 border-b border-orange-400/50 bg-orange-500/15 px-4 py-2 text-center text-xs font-semibold uppercase tracking-[0.12em] text-orange-100">
+      {message}
     </div>
   );
 }
