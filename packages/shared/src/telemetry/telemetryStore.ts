@@ -1,5 +1,6 @@
 import type { TelemetryState } from "../index.js";
 import { flightModeLabel, mavTypeLabel } from "./flightModes.js";
+import { finiteNumber, finiteOrNull } from "./finiteNumber.js";
 import { haversineDistanceM, type Coordinate } from "./geo.js";
 
 const statusRingLimit = 20;
@@ -116,7 +117,8 @@ export class TelemetryStore {
   updateSysStatus(payload: DataView): void {
     if (payload.byteLength < 31) return;
 
-    const voltage = nullablePositive(payload.getUint16(14, true), 0) / 1000;
+    const voltageRaw = nullableSentinel(payload.getUint16(14, true), 0);
+    const voltage = voltageRaw === null ? null : finiteOrNull(voltageRaw / 1000);
     const currentRaw = payload.getInt16(16, true);
     const batteryRemaining = payload.getInt8(30);
     const loadRaw = payload.getUint16(12, true);
@@ -124,8 +126,8 @@ export class TelemetryStore {
     this.state.system.sensorsPresent = payload.getUint32(0, true);
     this.state.system.sensorsEnabled = payload.getUint32(4, true);
     this.state.system.sensorsHealth = payload.getUint32(8, true);
-    this.state.system.loadPercent = loadRaw / 10;
-    if (Number.isFinite(voltage) && voltage > 0) {
+    this.state.system.loadPercent = finiteOrNull(loadRaw / 10);
+    if (voltage !== null && voltage > 0) {
       this.setVoltage(voltage);
     }
     if (currentRaw !== -1) {
@@ -188,9 +190,10 @@ export class TelemetryStore {
       this.updatePosition(lat, lon);
     }
 
-    this.state.position.altMsl = alt;
-    this.state.motion.groundSpeed = velocity === 65535 ? this.state.motion.groundSpeed : velocity / 100;
-    this.state.position.groundCourseDeg = cog === 65535 ? null : cog / 100;
+    this.state.position.altMsl = finiteOrNull(alt);
+    this.state.motion.groundSpeed =
+      velocity === 65535 ? this.state.motion.groundSpeed : finiteOrNull(velocity / 100);
+    this.state.position.groundCourseDeg = cog === 65535 ? null : finiteOrNull(cog / 100);
     this.updateStats();
   }
 
@@ -207,29 +210,30 @@ export class TelemetryStore {
       this.updatePosition(lat, lon);
     }
 
-    this.state.position.altMsl = alt;
-    this.state.position.relativeAlt = relativeAlt;
-    this.state.position.headingDeg = heading === 65535 ? null : heading / 100;
+    this.state.position.altMsl = finiteOrNull(alt);
+    this.state.position.relativeAlt = finiteOrNull(relativeAlt);
+    this.state.position.headingDeg = heading === 65535 ? null : finiteOrNull(heading / 100);
     this.updateStats();
   }
 
   updateVfrHud(payload: DataView): void {
     if (payload.byteLength < 20) return;
 
-    this.state.motion.airSpeed = payload.getFloat32(0, true);
-    this.state.motion.groundSpeed = payload.getFloat32(4, true);
-    this.state.position.altMsl = payload.getFloat32(8, true);
-    this.state.motion.climbRate = payload.getFloat32(12, true);
-    this.state.position.headingDeg = normalizeHeading(payload.getInt16(16, true));
+    this.state.motion.airSpeed = finiteOrNull(payload.getFloat32(0, true));
+    this.state.motion.groundSpeed = finiteOrNull(payload.getFloat32(4, true));
+    this.state.position.altMsl = finiteOrNull(payload.getFloat32(8, true));
+    this.state.motion.climbRate = finiteOrNull(payload.getFloat32(12, true));
+    const headingDeg = finiteNumber(normalizeHeading(payload.getInt16(16, true)));
+    this.state.position.headingDeg = headingDeg;
     this.updateStats();
   }
 
   updateAttitude(payload: DataView): void {
     if (payload.byteLength < 16) return;
 
-    this.state.motion.rollDeg = radiansToDegrees(payload.getFloat32(4, true));
-    this.state.motion.pitchDeg = radiansToDegrees(payload.getFloat32(8, true));
-    this.state.motion.yawDeg = normalizeHeading(radiansToDegrees(payload.getFloat32(12, true)));
+    this.state.motion.rollDeg = finiteNumber(radiansToDegrees(payload.getFloat32(4, true)));
+    this.state.motion.pitchDeg = finiteNumber(radiansToDegrees(payload.getFloat32(8, true)));
+    this.state.motion.yawDeg = finiteNumber(radiansToDegrees(payload.getFloat32(12, true)));
   }
 
   updateRadioStatus(payload: DataView): void {
@@ -309,18 +313,18 @@ export class TelemetryStore {
     if (hasPositionFix && lat !== null && lon !== null) {
       this.updatePosition(lat, lon);
       if (heading !== null && heading !== 65535) {
-        const headingDeg = heading / 100;
+        const headingDeg = finiteOrNull(heading / 100);
         this.state.position.headingDeg = headingDeg;
         this.state.position.groundCourseDeg = headingDeg;
         this.state.motion.yawDeg = headingDeg;
       }
       if (altM !== null && altM !== 65535) {
-        const altitude = altM - 1000;
+        const altitude = finiteOrNull(altM - 1000);
         this.state.position.relativeAlt = altitude;
         this.state.position.altMsl = altitude;
       }
       if (speedKmh !== null && speedKmh !== 65535) {
-        this.state.motion.groundSpeed = speedKmh / 10 / 3.6;
+        this.state.motion.groundSpeed = finiteOrNull(speedKmh / 10 / 3.6);
       }
       this.updateStats();
     }
@@ -330,7 +334,7 @@ export class TelemetryStore {
     if (payload.byteLength < 2) return;
     const cmPerS = readI16Be(payload, 0);
     if (cmPerS !== null) {
-      this.state.motion.climbRate = cmPerS / 100;
+      this.state.motion.climbRate = finiteOrNull(cmPerS / 100);
     }
   }
 
@@ -411,10 +415,16 @@ export class TelemetryStore {
   }
 
   private updatePosition(lat: number, lon: number): void {
-    this.state.position.lat = lat;
-    this.state.position.lon = lon;
+    const safeLat = finiteOrNull(lat);
+    const safeLon = finiteOrNull(lon);
+    if (safeLat === null || safeLon === null) {
+      return;
+    }
 
-    const current = { lat, lon };
+    this.state.position.lat = safeLat;
+    this.state.position.lon = safeLon;
+
+    const current = { lat: safeLat, lon: safeLon };
     this.home ??= current;
     this.state.stats.maxDistance = maxNullable(
       this.state.stats.maxDistance,
@@ -423,14 +433,22 @@ export class TelemetryStore {
   }
 
   private setVoltage(voltage: number): void {
-    this.state.battery.voltage = voltage;
-    this.state.battery.cellVoltageEstimate = estimateCellVoltage(voltage);
-    this.state.stats.minVoltage = minNullable(this.state.stats.minVoltage, voltage);
+    const safe = finiteOrNull(voltage);
+    if (safe === null || safe <= 0) {
+      return;
+    }
+    this.state.battery.voltage = safe;
+    this.state.battery.cellVoltageEstimate = estimateCellVoltage(safe);
+    this.state.stats.minVoltage = minNullable(this.state.stats.minVoltage, safe);
   }
 
   private setCurrent(current: number): void {
-    this.state.battery.current = current;
-    this.state.stats.maxCurrent = maxNullable(this.state.stats.maxCurrent, current);
+    const safe = finiteOrNull(current);
+    if (safe === null) {
+      return;
+    }
+    this.state.battery.current = safe;
+    this.state.stats.maxCurrent = maxNullable(this.state.stats.maxCurrent, safe);
   }
 
   private updateStats(): void {
@@ -510,8 +528,8 @@ function normalizeHeading(value: number): number {
   return ((value % 360) + 360) % 360;
 }
 
-function nullablePositive(value: number, nullValue: number): number {
-  return value === nullValue ? Number.NaN : value;
+function nullableSentinel(value: number, nullValue: number): number | null {
+  return value === nullValue ? null : value;
 }
 
 function maxNullable(current: number | null, next: number | null): number | null {
