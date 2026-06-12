@@ -193,7 +193,7 @@ function detectFindings(
       category: "battery",
       title: "Low battery voltage",
       detail: `Below ${t.minBatteryVoltage} V`,
-      durationMs: durationMs > 0 ? durationMs : undefined,
+      ...(durationMs > 0 ? { durationMs } : {}),
       showOnTimeline: true
     });
     lowBatteryStart = null;
@@ -270,8 +270,9 @@ function detectFindings(
         severity: radioBad ? "warn" : "info",
         category: "radio",
         title: radioBad ? "Link quality degraded" : "Link quality recovered",
-        detail:
-          state.radio.linkQuality != null ? `Link quality ${state.radio.linkQuality}%` : undefined,
+        ...(state.radio.linkQuality != null
+          ? { detail: `Link quality ${state.radio.linkQuality}%` }
+          : {}),
         showOnTimeline: true
       });
     }

@@ -7,6 +7,7 @@ import type {
 } from "@uav-ground-control-station/shared";
 import { appVersionLabel } from "../lib/appVersion";
 import { Badge } from "./Panel";
+import type { ActiveView } from "../flightReview";
 
 const baudRates = [57600, 115200, 420000, 460800];
 const manualPortValue = "__manual__";
@@ -20,9 +21,12 @@ interface TopbarProps {
   packetCount: number;
   packetAge: string;
   activeSourceMode: TelemetrySourceMode;
+  activeView?: ActiveView;
+  replayFileName?: string | null;
   liveControlsLocked: boolean;
   liveConnectedInBackground: boolean;
   onSetSourceMode: (mode: TelemetrySourceMode) => void;
+  onBackToDashboard?: () => void;
   onRefreshPorts: () => Promise<void>;
   onConnect: (path: string, baudRate: number) => Promise<void>;
   onDisconnect: () => Promise<void>;
@@ -41,9 +45,12 @@ export function Topbar({
   packetCount,
   packetAge,
   activeSourceMode,
+  activeView = "dashboard",
+  replayFileName = null,
   liveControlsLocked,
   liveConnectedInBackground,
   onSetSourceMode,
+  onBackToDashboard,
   onRefreshPorts,
   onConnect,
   onDisconnect,
@@ -80,6 +87,8 @@ export function Topbar({
           ? "WS online"
           : "WS offline";
 
+  const isFlightReview = activeView === "flightReview";
+
   async function run(action: () => Promise<void>) {
     setBusy(true);
     try {
@@ -105,9 +114,20 @@ export function Topbar({
             </span>
           </div>
           <h1 className="truncate text-base font-semibold tracking-wide text-slate-50 sm:text-lg">
-            <span className="xl:hidden">UAV GCS</span>
-            <span className="hidden xl:inline">UAV Ground Control Station</span>
+            {isFlightReview ? (
+              "Flight Review"
+            ) : (
+              <>
+                <span className="xl:hidden">UAV GCS</span>
+                <span className="hidden xl:inline">UAV Ground Control Station</span>
+              </>
+            )}
           </h1>
+          {isFlightReview && replayFileName && (
+            <p className="mt-0.5 truncate font-mono text-[11px] text-amber-200/90" title={replayFileName}>
+              {replayFileName}
+            </p>
+          )}
           {isCloud && (
             <p
               className="mt-0.5 cursor-help truncate text-[10px] font-medium text-emerald-300/90 sm:text-[11px]"
@@ -121,6 +141,15 @@ export function Topbar({
           )}
         </div>
 
+        {isFlightReview ? (
+          <div className="ml-auto flex items-center gap-2">
+            <SourceModeBadge mode="replay" />
+            <button type="button" className="btn-secondary whitespace-nowrap" onClick={onBackToDashboard}>
+              Back to dashboard
+            </button>
+          </div>
+        ) : (
+          <>
         <SourceModeSwitch activeSourceMode={activeSourceMode} onSetSourceMode={onSetSourceMode} />
 
         <div data-tour="serial-connect" className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
@@ -234,6 +263,8 @@ export function Topbar({
           )}
           <Stat label="Last" value={packetAge} />
         </div>
+          </>
+        )}
 
       </div>
 

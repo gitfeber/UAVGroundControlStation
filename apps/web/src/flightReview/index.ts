@@ -4,6 +4,7 @@ export {
   DEFAULT_FLIGHT_REVIEW_THRESHOLDS
 } from "./deriveFlightReview";
 export type { FlightReviewThresholds, FlightReviewResult } from "./deriveFlightReview";
+export { useFlightReviewAnalysis, type ActiveView } from "./useFlightReviewAnalysis";
 export {
   MAX_GRAPH_POINTS,
   MAX_PATH_VERTICES,
