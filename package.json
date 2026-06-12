@@ -33,6 +33,7 @@
   },
   "pnpm": {
     "overrides": {
+      "esbuild": "^0.28.1",
       "xml2js": "^0.5.0"
     }
   }
