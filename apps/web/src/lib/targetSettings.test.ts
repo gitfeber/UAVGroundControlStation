@@ -38,4 +38,56 @@ describe("targetSettings", () => {
     expect(loaded.raycast.staleTelemetryWarnMs).toBe(DEFAULT_RAYCAST_CONFIG.staleTelemetryWarnMs);
     vi.unstubAllGlobals();
   });
+
+  it("clamps corrupted persisted settings instead of passing NaN into geo math", () => {
+    const storage = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        storage.set(key, value);
+      }
+    });
+    storage.set(
+      "uav-gcs.target.settings",
+      JSON.stringify({
+        videoLatencyMs: Number.NaN,
+        altitudeMode: "invalid",
+        altitudeOffsetM: Number.POSITIVE_INFINITY,
+        camera: {
+          calibrationDeg: { roll: Number.NaN, pitch: -999, yaw: "bad" },
+          gimbalFrame: "sideways",
+          pitchSign: "broken",
+          yawReference: "east",
+          allowBodyFixedWhenGimbalMissing: "yes"
+        },
+        raycast: {
+          maxRangeM: -1,
+          stepM: Number.NaN,
+          minDownAngleDeg: 500,
+          refineIterations: 0,
+          staleTelemetryWarnMs: 1,
+          gpsLowAccuracyEphM: Number.NaN,
+          gpsFewSatellitesWarn: -5
+        }
+      })
+    );
+
+    const loaded = loadTargetEstimationSettings();
+    expect(loaded.videoLatencyMs).toBe(DEFAULT_TARGET_ESTIMATION_SETTINGS.videoLatencyMs);
+    expect(loaded.altitudeMode).toBe("amsl");
+    expect(loaded.altitudeOffsetM).toBe(0);
+    expect(loaded.camera.calibrationDeg.roll).toBe(0);
+    expect(loaded.camera.calibrationDeg.pitch).toBe(-180);
+    expect(loaded.camera.calibrationDeg.yaw).toBe(0);
+    expect(loaded.camera.gimbalFrame).toBe("earth");
+    expect(loaded.camera.allowBodyFixedWhenGimbalMissing).toBe(false);
+    expect(loaded.raycast.maxRangeM).toBe(100);
+    expect(loaded.raycast.stepM).toBe(DEFAULT_RAYCAST_CONFIG.stepM);
+    expect(loaded.raycast.minDownAngleDeg).toBe(89);
+    expect(loaded.raycast.refineIterations).toBe(1);
+    expect(loaded.raycast.staleTelemetryWarnMs).toBe(100);
+    expect(loaded.raycast.gpsLowAccuracyEphM).toBe(DEFAULT_RAYCAST_CONFIG.gpsLowAccuracyEphM);
+    expect(loaded.raycast.gpsFewSatellitesWarn).toBe(0);
+    vi.unstubAllGlobals();
+  });
 });

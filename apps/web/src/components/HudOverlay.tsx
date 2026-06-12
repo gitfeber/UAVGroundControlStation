@@ -9,11 +9,13 @@ const PITCH_LADDER_DEG = [5, 10, 15, 20, 25, 30, 35, 40, 45];
 
 interface HudOverlayProps {
   telemetry: TelemetryState;
+  /** When true, dims the HUD and shows a stale-data banner (live mode only). */
+  stale?: boolean;
   /** Phase 2: smaller variant for video PiP. */
   compact?: boolean;
 }
 
-export function HudOverlay({ telemetry, compact = false }: HudOverlayProps) {
+export function HudOverlay({ telemetry, stale = false, compact = false }: HudOverlayProps) {
   const size = compact ? 220 : 320;
   const cx = size / 2;
   const cy = size / 2;
@@ -37,10 +39,19 @@ export function HudOverlay({ telemetry, compact = false }: HudOverlayProps) {
 
   return (
     <div
-      className="relative pointer-events-none select-none font-mono text-slate-100"
+      className={`relative pointer-events-none select-none font-mono text-slate-100 ${
+        stale ? "opacity-60 saturate-50" : ""
+      }`}
       style={{ width: size, height: size }}
-      aria-label="Attitude HUD"
+      aria-label={stale ? "Attitude HUD — telemetry stale" : "Attitude HUD"}
     >
+      {stale && (
+        <div className="absolute inset-x-0 top-0 z-10 flex justify-center">
+          <span className="rounded-b border border-amber-400/50 bg-amber-950/90 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.16em] text-amber-200">
+            Stale
+          </span>
+        </div>
+      )}
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="overflow-visible">
         <defs>
           <clipPath id="hud-attitude-clip">

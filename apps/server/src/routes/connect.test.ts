@@ -168,6 +168,24 @@ describe("/api/connect validation", () => {
     }
   });
 
+  it("rejects cross-origin connect attempts with 403 and does not call connect", async () => {
+    app = await buildApp({ serial });
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/connect",
+      headers: {
+        origin: "https://evil.example",
+        "content-type": "application/json"
+      },
+      payload: { path: "COM3", baudRate: 115200 }
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({
+      error: "Cross-origin requests to serial-control endpoints are not allowed."
+    });
+    expect(serial.connect).not.toHaveBeenCalled();
+  });
+
   it("leaves the server responsive after repeated invalid connect attempts", async () => {
     app = await buildApp({ serial });
     for (let attempt = 0; attempt < 5; attempt += 1) {

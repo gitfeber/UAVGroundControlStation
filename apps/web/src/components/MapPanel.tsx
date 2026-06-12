@@ -20,6 +20,7 @@ interface MapPanelProps {
   coordinate: Coordinate | null;
   home: Coordinate | null;
   groundTarget?: TargetEstimate | null;
+  telemetryStale?: boolean;
   /**
    * Replay/simulation controlled track. When `trackMode` is "controlled" the
    * map renders exactly this array and never appends internally (ADR 0003 §5).
@@ -34,7 +35,7 @@ type MapInstance = import("maplibre-gl").Map;
 
 const fallbackCenter: [number, number] = [10.4515, 51.1657];
 
-export function MapPanel({ telemetry, coordinate, home, groundTarget, controlledTrack, trackMode = "internal" }: MapPanelProps) {
+export function MapPanel({ telemetry, coordinate, home, groundTarget, telemetryStale = false, controlledTrack, trackMode = "internal" }: MapPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapInstance | null>(null);
   const centeredRef = useRef(false);
@@ -191,7 +192,7 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, controlled
       {basemapSwitcherEnabled && <MapBasemapSwitcher value={basemapId} onChange={handleBasemapChange} />}
 
       <div className="pointer-events-none absolute bottom-6 left-1/2 z-10 -translate-x-1/2">
-        <HudOverlay telemetry={telemetry} />
+        <HudOverlay telemetry={telemetry} stale={telemetryStale} />
       </div>
 
       {!isControlled && (
