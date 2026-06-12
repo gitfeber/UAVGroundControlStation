@@ -495,3 +495,79 @@ button:disabled {
     animation: none;
   }
 }
+
+/* Onboarding tour (driver.js) — match dark GCS theme */
+.driver-active .driver-overlay,
+.driver-active * {
+  pointer-events: auto;
+}
+
+.gcs-driver-popover.driver-popover {
+  background: rgba(2, 6, 23, 0.96);
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  border-radius: 0.75rem;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.8), 0 18px 48px rgba(2, 6, 23, 0.65);
+  color: #e2e8f0;
+  max-width: min(22rem, calc(100vw - 2rem));
+}
+
+.gcs-driver-popover .driver-popover-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #a5f3fc;
+}
+
+.gcs-driver-popover .driver-popover-description {
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: #cbd5e1;
+}
+
+.gcs-driver-popover .driver-popover-progress-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.gcs-driver-popover .driver-popover-footer button {
+  border-radius: 0.5rem;
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-shadow: none;
+}
+
+.gcs-driver-popover .driver-popover-prev-btn,
+.gcs-driver-popover .driver-popover-close-btn {
+  background: rgba(15, 23, 42, 0.9);
+  color: #cbd5e1;
+}
+
+.gcs-driver-popover .driver-popover-next-btn,
+.gcs-driver-popover .driver-popover-done-btn {
+  background: rgba(34, 211, 238, 0.16);
+  color: #a5f3fc;
+}
+
+.gcs-driver-popover .driver-popover-arrow {
+  border-color: rgba(34, 211, 238, 0.28);
+}
+
+.gcs-driver-popover .driver-popover-arrow-side-left {
+  border-left-color: rgba(2, 6, 23, 0.96);
+}
+
+.gcs-driver-popover .driver-popover-arrow-side-right {
+  border-right-color: rgba(2, 6, 23, 0.96);
+}
+
+.gcs-driver-popover .driver-popover-arrow-side-top {
+  border-top-color: rgba(2, 6, 23, 0.96);
+}
+
+.gcs-driver-popover .driver-popover-arrow-side-bottom {
+  border-bottom-color: rgba(2, 6, 23, 0.96);
+}

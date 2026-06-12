@@ -39,6 +39,7 @@ export function HudOverlay({ telemetry, stale = false, compact = false }: HudOve
 
   return (
     <div
+      data-tour="attitude-hud"
       className={`relative pointer-events-none select-none font-mono text-slate-100 ${
         stale ? "opacity-60 saturate-50" : ""
       }`}

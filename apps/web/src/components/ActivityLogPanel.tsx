@@ -13,7 +13,7 @@ export function ActivityLogPanel({ logs, messages, onClear }: ActivityLogPanelPr
   const latestWarning = logs.find((entry) => entry.level === "warning" || entry.level === "error");
 
   return (
-    <section className="absolute bottom-4 left-[340px] z-20 w-[520px] overflow-hidden rounded-xl border border-cyan-300/20 bg-slate-950/90 shadow-glow backdrop-blur">
+    <section data-tour="activity-log" className="absolute bottom-4 left-[340px] z-20 w-[520px] overflow-hidden rounded-xl border border-cyan-300/20 bg-slate-950/90 shadow-glow backdrop-blur">
       <header className="flex items-center justify-between border-b border-line px-3 py-2">
         <button className="text-left" onClick={() => setOpen((value) => !value)}>
           <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-200">Activity Log</div>

@@ -8,6 +8,7 @@ interface MapBasemapSwitcherProps {
 export function MapBasemapSwitcher({ value, onChange }: MapBasemapSwitcherProps) {
   return (
     <div
+      data-tour="map-basemap"
       className="map-basemap-switcher absolute right-4 top-4 z-10 flex"
       role="group"
       aria-label="Map basemap"

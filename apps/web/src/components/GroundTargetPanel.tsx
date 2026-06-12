@@ -35,10 +35,11 @@ export function GroundTargetPanel({
   const qualityTone = estimate ? qualityToTone(estimate.quality) : ("neutral" as const);
 
   return (
-    <Panel
-      title="Ground Target"
-      {...(sortable ? { sortable: true, onDragStart, onDragEnd } : {})}
-    >
+    <div data-tour="ground-target">
+      <Panel
+        title="Ground Target"
+        {...(sortable ? { sortable: true, onDragStart, onDragEnd } : {})}
+      >
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Badge tone={qualityTone}>{estimate?.quality ?? "idle"}</Badge>
         {liveOnlyBlocked && <Badge tone="warn">live only</Badge>}
@@ -349,6 +350,7 @@ export function GroundTargetPanel({
         </div>
       </div>
     </Panel>
+    </div>
   );
 }
 

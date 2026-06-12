@@ -49,6 +49,7 @@ export function TelemetrySidebar({
 
   return (
     <aside
+      data-tour="telemetry-sidebar"
       className={`z-10 flex w-[320px] shrink-0 flex-col gap-3 overflow-y-auto border-r border-cyan-300/10 bg-slate-950/78 p-3 backdrop-blur ${
         telemetryStale ? "opacity-70 saturate-75" : ""
       }`}
@@ -74,21 +75,25 @@ export function TelemetrySidebar({
         </div>
       </div>
 
-      <PreflightHealthCard health={preflight} />
+      <div data-tour="preflight-health">
+        <PreflightHealthCard health={preflight} />
+      </div>
 
-      <Panel title="Alerts">
-        {alerts.length === 0 ? (
-          <div className="text-sm text-emerald-200">No active alerts</div>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {alerts.map((alert) => (
-              <Badge key={alert.label} tone={alert.level === "critical" ? "bad" : "warn"}>
-                {alert.label}
-              </Badge>
-            ))}
-          </div>
-        )}
-      </Panel>
+      <div data-tour="alerts">
+        <Panel title="Alerts">
+          {alerts.length === 0 ? (
+            <div className="text-sm text-emerald-200">No active alerts</div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {alerts.map((alert) => (
+                <Badge key={alert.label} tone={alert.level === "critical" ? "bad" : "warn"}>
+                  {alert.label}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </Panel>
+      </div>
 
       {view === "instruments" ? (
         <TelemetryInstruments
@@ -273,7 +278,7 @@ function renderTextCard(id: SidebarCardId, ctx: TextRenderContext, drag: Sidebar
 
 function SidebarViewToggle({ view, onChange }: { view: SidebarView; onChange: (view: SidebarView) => void }) {
   return (
-    <div className="flex rounded-lg border border-cyan-300/20 bg-slate-900/80 p-0.5 font-mono text-[10px]">
+    <div data-tour="sidebar-view-toggle" className="flex rounded-lg border border-cyan-300/20 bg-slate-900/80 p-0.5 font-mono text-[10px]">
       <button
         type="button"
         className={toggleClass(view === "text")}
