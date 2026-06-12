@@ -8,12 +8,14 @@ use tiff::tags::Tag;
 use std::{
     fs::File,
     io::BufReader,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 pub const DEFAULT_WINDOW_HALF_WIDTH_M: f64 = 2_000.0;
 pub const RECENTER_MARGIN: f64 = 0.5;
 pub const MAX_WINDOW_SAMPLES: usize = 512;
+/// Reject full-raster GeoTIFFs larger than this before allocating (4096×4096).
+const MAX_RASTER_PIXELS: u64 = 16_777_216;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -136,20 +138,17 @@ impl DemService {
     }
 
     pub fn load_terrain_model(&mut self, path: &str) -> Result<TerrainMetadataResponse, DemError> {
-        let trimmed = path.trim();
-        if trimmed.is_empty() {
-            return Err(DemError::InvalidArgument("terrain model path is empty".to_string()));
+        let source_path = validate_terrain_model_path(path)?;
+        if !source_path.exists() {
+            return Err(DemError::Io("terrain model file not found".to_string()));
         }
 
-        let source_path = PathBuf::from(trimmed);
-        if !source_path.exists() {
-            return Err(DemError::Io(format!("terrain model not found: {trimmed}")));
-        }
+        validate_raster_dimensions(&source_path)?;
 
         let band_nodata = read_gdal_nodata(&source_path)?;
-        let file = File::open(&source_path).map_err(|error| DemError::Io(error.to_string()))?;
+        let file = File::open(&source_path).map_err(|_| DemError::Io("unable to open terrain model".to_string()))?;
         let reader = BufReader::new(file);
-        let geo_tiff = GeoTiff::read(reader).map_err(|error| DemError::GeoTiff(error.to_string()))?;
+        let geo_tiff = GeoTiff::read(reader).map_err(|_| DemError::GeoTiff("unable to parse terrain model".to_string()))?;
 
         let (crs, horizontal_crs) = detect_horizontal_crs(&geo_tiff)?;
         let extent = geo_tiff.model_extent();
@@ -535,14 +534,51 @@ fn horizontal_crs_label(crs: DemHorizontalCrs) -> String {
 
 const GDAL_NODATA_TAG: Tag = Tag::Unknown(42113);
 
+fn validate_terrain_model_path(path: &str) -> Result<PathBuf, DemError> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err(DemError::InvalidArgument(
+            "terrain model path is empty".to_string(),
+        ));
+    }
+    if trimmed.contains("..") {
+        return Err(DemError::InvalidArgument(
+            "terrain model path is not allowed".to_string(),
+        ));
+    }
+    let lower = trimmed.to_lowercase();
+    if !lower.ends_with(".tif") && !lower.ends_with(".tiff") && !lower.ends_with(".dgm") {
+        return Err(DemError::InvalidArgument(
+            "terrain model must be a GeoTIFF (.tif/.tiff) or DGM file".to_string(),
+        ));
+    }
+    Ok(PathBuf::from(trimmed))
+}
+
+fn validate_raster_dimensions(path: &Path) -> Result<(), DemError> {
+    let file = File::open(path).map_err(|_| DemError::Io("unable to open terrain model".to_string()))?;
+    let mut decoder = Decoder::new(BufReader::new(file))
+        .map_err(|_| DemError::GeoTiff("unsupported terrain model format".to_string()))?;
+    let (width, height) = decoder
+        .dimensions()
+        .map_err(|_| DemError::GeoTiff("unable to read terrain model dimensions".to_string()))?;
+    let pixels = u64::from(width) * u64::from(height);
+    if pixels == 0 || pixels > MAX_RASTER_PIXELS {
+        return Err(DemError::GeoTiff(
+            "terrain model dimensions exceed supported limits".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 /// `geotiff` 0.1 does not surface band NoData; read the GDAL ASCII tag directly.
 fn read_gdal_nodata(path: &PathBuf) -> Result<Option<f32>, DemError> {
-    let file = File::open(path).map_err(|error| DemError::Io(error.to_string()))?;
-    let mut decoder =
-        Decoder::new(BufReader::new(file)).map_err(|error| DemError::GeoTiff(error.to_string()))?;
+    let file = File::open(path).map_err(|_| DemError::Io("unable to open terrain model".to_string()))?;
+    let mut decoder = Decoder::new(BufReader::new(file))
+        .map_err(|_| DemError::GeoTiff("unable to read terrain model metadata".to_string()))?;
     let Some(value) = decoder
         .find_tag(GDAL_NODATA_TAG)
-        .map_err(|error| DemError::GeoTiff(error.to_string()))?
+        .map_err(|_| DemError::GeoTiff("unable to read terrain model metadata".to_string()))?
     else {
         return Ok(None);
     };
@@ -880,5 +916,14 @@ mod tests {
             dem_failure_reason(&DemError::OutOfCoverage),
             Some("dem_out_of_coverage".to_string())
         );
+    }
+
+    #[test]
+    fn terrain_model_path_rejects_traversal_and_unsupported_extensions() {
+        assert!(validate_terrain_model_path("").is_err());
+        assert!(validate_terrain_model_path("../secrets.tif").is_err());
+        assert!(validate_terrain_model_path("/tmp/model.txt").is_err());
+        assert!(validate_terrain_model_path("/tmp/model.tif").is_ok());
+        assert!(validate_terrain_model_path("/tmp/model.tiff").is_ok());
     }
 }
