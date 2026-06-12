@@ -1,4 +1,5 @@
 import type { StyleSpecification } from "maplibre-gl";
+import { sanitizeHttpUrl, sanitizeTileTemplateUrl } from "./safeHttpUrl";
 
 export type MapBasemapId = "tactical" | "satellite" | "topo";
 
@@ -37,7 +38,7 @@ export function isMapBasemapSwitcherEnabled(): boolean {
 }
 
 export function buildMapStyle(basemapId: MapBasemapId): StyleSpecification | string {
-  const customStyleUrl = import.meta.env.VITE_MAP_STYLE_URL;
+  const customStyleUrl = sanitizeHttpUrl(import.meta.env.VITE_MAP_STYLE_URL ?? "");
   if (customStyleUrl) return customStyleUrl;
 
   const { tiles, attribution } = basemapTileConfig(basemapId);
@@ -65,7 +66,7 @@ export function buildMapStyle(basemapId: MapBasemapId): StyleSpecification | str
 export function basemapTileConfig(basemapId: MapBasemapId): { tiles: string[]; attribution: string } {
   switch (basemapId) {
     case "satellite": {
-      const customSatelliteUrl = import.meta.env.VITE_SATELLITE_TILE_URL;
+      const customSatelliteUrl = sanitizeTileTemplateUrl(import.meta.env.VITE_SATELLITE_TILE_URL ?? "");
       if (customSatelliteUrl) {
         return {
           tiles: [customSatelliteUrl],
