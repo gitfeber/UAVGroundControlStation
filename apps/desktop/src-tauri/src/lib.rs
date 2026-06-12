@@ -472,11 +472,23 @@ fn get_elevations_along_ray(
 
 #[tauri::command]
 fn save_target_log(path: String, contents: String) -> Result<(), String> {
+    validate_target_log_path(&path)?;
+    std::fs::write(path.trim(), contents).map_err(|_| "Unable to save target log.".to_string())
+}
+
+fn validate_target_log_path(path: &str) -> Result<(), String> {
     let trimmed = path.trim();
     if trimmed.is_empty() {
         return Err("target log path is empty".to_string());
     }
-    std::fs::write(trimmed, contents).map_err(|error| error.to_string())
+    if trimmed.contains("..") {
+        return Err("target log path is not allowed".to_string());
+    }
+    let lower = trimmed.to_lowercase();
+    if !lower.ends_with(".json") && !lower.ends_with(".csv") {
+        return Err("target log path must end with .json or .csv".to_string());
+    }
+    Ok(())
 }
 
 pub fn run() {
@@ -1757,5 +1769,14 @@ mod parser_tests {
         assert!(gimbal.yaw_deg.abs() < 0.01);
         assert_eq!(gimbal.yaw_in_earth_frame, Some(true));
         assert!(telemetry.sampled_at_ms.is_some());
+    }
+
+    #[test]
+    fn target_log_path_rejects_traversal_and_unsupported_extensions() {
+        assert!(validate_target_log_path("").is_err());
+        assert!(validate_target_log_path("../secrets.json").is_err());
+        assert!(validate_target_log_path("/tmp/target.txt").is_err());
+        assert!(validate_target_log_path("/tmp/target.json").is_ok());
+        assert!(validate_target_log_path("/tmp/target.csv").is_ok());
     }
 }
