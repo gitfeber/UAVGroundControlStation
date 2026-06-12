@@ -12,13 +12,19 @@ pub struct CrsfFrame {
 
 pub struct CrsfFrameParser {
     buffer: Vec<u8>,
+    parser_errors: u32,
 }
 
 impl CrsfFrameParser {
     pub fn new() -> Self {
         Self {
             buffer: Vec::new(),
+            parser_errors: 0,
         }
+    }
+
+    pub fn take_parser_errors(&mut self) -> u32 {
+        std::mem::take(&mut self.parser_errors)
     }
 
     pub fn push(&mut self, chunk: &[u8]) -> Vec<CrsfFrame> {
@@ -44,6 +50,7 @@ impl CrsfFrameParser {
 
             let frame_len = self.buffer[1] as usize;
             if frame_len < 2 || frame_len > CRSF_MAX_FRAME_LEN {
+                self.parser_errors += 1;
                 self.buffer.drain(0..1);
                 continue;
             }
@@ -56,6 +63,8 @@ impl CrsfFrameParser {
             let frame_bytes: Vec<u8> = self.buffer.drain(0..total_len).collect();
             if let Some(frame) = parse_frame(&frame_bytes) {
                 frames.push(frame);
+            } else {
+                self.parser_errors += 1;
             }
         }
 
@@ -562,5 +571,29 @@ mod tests {
     #[test]
     fn crsf_message_label_maps_battery_type() {
         assert_eq!(crsf_message_label(0x08), "CRSF Battery");
+    }
+
+    #[test]
+    fn crsf_parser_counts_malformed_frames_without_panicking() {
+        let mut parser = CrsfFrameParser::new();
+        assert!(parser.push(&[0xC8, 0xFF, 0x08]).is_empty());
+        assert!(parser.take_parser_errors() >= 1);
+
+        let mut parser = CrsfFrameParser::new();
+        let mut bad = build_frame(0xEA, 0x08, &[0xFF; 8]);
+        if let Some(last) = bad.last_mut() {
+            *last ^= 0x55;
+        }
+        assert!(parser.push(&bad).is_empty());
+        assert!(parser.take_parser_errors() >= 1);
+    }
+
+    #[test]
+    fn crsf_parser_survives_truncated_chunks() {
+        let bytes = build_frame(0xC8, 0x0B, &[]);
+        let mut parser = CrsfFrameParser::new();
+        assert!(parser.push(&bytes[..2]).is_empty());
+        let frames = parser.push(&bytes[2..]);
+        assert_eq!(frames.len(), 1);
     }
 }

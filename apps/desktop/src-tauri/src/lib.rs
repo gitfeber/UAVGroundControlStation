@@ -1742,6 +1742,15 @@ mod parser_tests {
     }
 
     #[test]
+    fn mavlink_parser_drops_truncated_v2_frame_without_panic() {
+        let mut sequence = 0_u8;
+        let frame = mavlink_v2_packet(285, &[0; 4], 137, &mut sequence);
+        let mut parser = MavlinkFrameParser::new();
+        assert!(parser.push_isolated(&frame[..8]).is_empty());
+        assert!(parser.take_parser_errors() == 0);
+    }
+
+    #[test]
     fn parses_gimbal_device_attitude_status_frame() {
         let payload = fixtures::gimbal_285::PAYLOAD_IDENTITY_EARTH_FRAME;
         let mut sequence = 0_u8;
