@@ -16,12 +16,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@uav-ground-control-station/shared": "workspace:*",
-    "@uav-ground-control-station/target-estimation": "workspace:*",
     "@tauri-apps/api": "latest",
     "@tauri-apps/plugin-dialog": "latest",
+    "@uav-ground-control-station/shared": "workspace:*",
+    "@uav-ground-control-station/target-estimation": "workspace:*",
     "@vitejs/plugin-react": "latest",
     "autoprefixer": "latest",
+    "driver.js": "^1.4.0",
     "maplibre-gl": "latest",
     "postcss": "latest",
     "react": "latest",

@@ -194,7 +194,7 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, telemetryS
   }, [groundTarget, droneLngLat, mapReady, styleEpoch, telemetryStale]);
 
   return (
-    <main className="relative min-w-0 flex-1">
+    <main data-tour="map" className="relative min-w-0 flex-1">
       <div ref={containerRef} className="h-full w-full bg-slate-950" />
 
       {basemapSwitcherEnabled && <MapBasemapSwitcher value={basemapId} onChange={handleBasemapChange} />}
@@ -204,7 +204,7 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, telemetryS
       </div>
 
       {!isControlled && (
-        <button className="btn-secondary absolute bottom-4 left-4" onClick={() => setTrack([])}>
+        <button data-tour="clear-track" className="btn-secondary absolute bottom-4 left-4" onClick={() => setTrack([])}>
           Clear Track
         </button>
       )}

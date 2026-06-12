@@ -14,6 +14,7 @@ import { VideoPanel } from "./components/VideoPanel";
 import { ActivityLogPanel } from "./components/ActivityLogPanel";
 import { ReplaySimPanel } from "./components/ReplaySimPanel";
 import { SplashScreen } from "./components/SplashScreen";
+import { OnboardingTour } from "./components/OnboardingTour";
 import { getRemoteSerialControlApiBanner } from "./lib/apiSafety";
 import { webSerialUnsupportedReason } from "./link/webSerialSupport";
 
@@ -21,6 +22,8 @@ const ENABLE_SPLASH_SCREEN = import.meta.env.VITE_ENABLE_SPLASH_SCREEN !== "fals
 
 export function App() {
   const [showSplash, setShowSplash] = useState(ENABLE_SPLASH_SCREEN);
+  const [dashboardReady, setDashboardReady] = useState(!ENABLE_SPLASH_SCREEN);
+  const [tourRestartToken, setTourRestartToken] = useState(0);
   const {
     telemetry,
     status,
@@ -122,6 +125,7 @@ export function App() {
           onReset={resetAll}
           onStartLogging={startLogging}
           onStopLogging={stopLogging}
+          onRestartTour={() => setTourRestartToken((token) => token + 1)}
         />
 
         {cloudUnsupported && <CloudUnsupportedBanner reason={cloudUnsupported} />}
@@ -166,7 +170,15 @@ export function App() {
           )}
         </div>
       </div>
-      {showSplash && <SplashScreen onDone={() => setShowSplash(false)} />}
+      {showSplash && (
+        <SplashScreen
+          onDone={() => {
+            setShowSplash(false);
+            setDashboardReady(true);
+          }}
+        />
+      )}
+      <OnboardingTour active={dashboardReady} runtimeMode={runtimeMode} restartToken={tourRestartToken} />
     </>
   );
 }

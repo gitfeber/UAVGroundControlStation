@@ -29,6 +29,7 @@ interface TopbarProps {
   onReset: () => Promise<void>;
   onStartLogging: () => Promise<void>;
   onStopLogging: () => Promise<void>;
+  onRestartTour: () => void;
 }
 
 export function Topbar({
@@ -48,7 +49,8 @@ export function Topbar({
   onDisconnect,
   onReset,
   onStartLogging,
-  onStopLogging
+  onStopLogging,
+  onRestartTour
 }: TopbarProps) {
   const isCloud = runtimeMode === "cloud";
   const [selectedPath, setSelectedPath] = useState("");
@@ -88,7 +90,10 @@ export function Topbar({
   }
 
   return (
-    <header className="relative z-20 shrink-0 border-b border-cyan-300/10 bg-slate-950/92 px-3 py-2 shadow-glow backdrop-blur sm:px-4">
+    <header
+      data-tour="topbar"
+      className="relative z-20 shrink-0 border-b border-cyan-300/10 bg-slate-950/92 px-3 py-2 shadow-glow backdrop-blur sm:px-4"
+    >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="min-w-0 shrink">
           <div className="flex min-w-0 items-baseline gap-2">
@@ -118,7 +123,7 @@ export function Topbar({
 
         <SourceModeSwitch activeSourceMode={activeSourceMode} onSetSourceMode={onSetSourceMode} />
 
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+        <div data-tour="serial-connect" className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           {isCloud ? (
             <span className="min-w-0 flex-1 basis-[min(100%,18rem)] truncate text-xs text-slate-400 sm:text-sm">
               Click Connect — your browser will prompt to pick the serial device.
@@ -207,7 +212,16 @@ export function Topbar({
           </div>
         </div>
 
-        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:ml-auto">
+        <div data-tour="link-status" className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:ml-auto">
+          <button
+            type="button"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-300/20 bg-slate-900 text-sm font-bold text-cyan-200/90 transition hover:border-cyan-300/50 hover:text-cyan-100"
+            title="Restart onboarding tour"
+            aria-label="Restart onboarding tour"
+            onClick={onRestartTour}
+          >
+            ?
+          </button>
           <SourceModeBadge mode={activeSourceMode} />
           <Badge tone={badgeTone}>{badgeText}</Badge>
           <Badge tone={wsConnected ? "good" : "bad"}>{bridgeLabel}</Badge>
@@ -252,7 +266,7 @@ function SourceModeSwitch({
   onSetSourceMode: (mode: TelemetrySourceMode) => void;
 }) {
   return (
-    <div className="inline-flex shrink-0 overflow-hidden rounded-lg border border-cyan-300/20 bg-slate-900">
+    <div data-tour="source-mode" className="inline-flex shrink-0 overflow-hidden rounded-lg border border-cyan-300/20 bg-slate-900">
       {sourceModes.map(({ mode, label }) => {
         const active = mode === activeSourceMode;
         return (

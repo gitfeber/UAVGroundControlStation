@@ -61,7 +61,7 @@ export function VideoPanel({ estimate }: VideoPanelProps) {
     : { right: 24, bottom: 24 };
 
   return (
-    <section className="absolute z-20 w-[360px] overflow-hidden rounded-xl border border-cyan-300/20 bg-slate-950/88 shadow-glow backdrop-blur" style={style}>
+    <section data-tour="camera-feed" className="absolute z-20 w-[360px] overflow-hidden rounded-xl border border-cyan-300/20 bg-slate-950/88 shadow-glow backdrop-blur" style={style}>
       <header className="flex cursor-move items-center justify-between border-b border-line px-3 py-2" onPointerDown={startDrag}>
         <div>
           <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-200">Camera Feed</div>
