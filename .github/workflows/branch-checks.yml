@@ -74,3 +74,6 @@ jobs:
             libudev-dev \
             patchelf
       - run: cargo test
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - run: cargo audit
