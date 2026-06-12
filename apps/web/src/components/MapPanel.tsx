@@ -157,9 +157,17 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, telemetryS
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map || !mapReady || !map.getLayer("drone-point")) return;
+    map.setPaintProperty("drone-point", "circle-opacity", telemetryStale ? 0.45 : 1);
+    map.setPaintProperty("drone-point", "circle-color", telemetryStale ? "#94a3b8" : "#22d3ee");
+  }, [telemetryStale, mapReady, styleEpoch]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map || !mapReady) return;
 
     const showTarget =
+      !telemetryStale &&
       groundTarget &&
       (groundTarget.valid || groundTarget.quality === "warn") &&
       groundTarget.lat !== null &&
@@ -183,7 +191,7 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, telemetryS
 
     targetSource?.setData(pointCollection(targetLngLat));
     losSource?.setData(lineFeature(droneLngLat, targetLngLat));
-  }, [groundTarget, droneLngLat, mapReady, styleEpoch]);
+  }, [groundTarget, droneLngLat, mapReady, styleEpoch, telemetryStale]);
 
   return (
     <main className="relative min-w-0 flex-1">

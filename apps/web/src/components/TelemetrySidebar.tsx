@@ -23,9 +23,17 @@ interface TelemetrySidebarProps {
   alerts: AlertItem[];
   preflight: PreflightHealth;
   targetEstimation: TargetEstimationController;
+  telemetryStale?: boolean;
 }
 
-export function TelemetrySidebar({ telemetry, distanceFromHome, alerts, preflight, targetEstimation }: TelemetrySidebarProps) {
+export function TelemetrySidebar({
+  telemetry,
+  distanceFromHome,
+  alerts,
+  preflight,
+  targetEstimation,
+  telemetryStale = false
+}: TelemetrySidebarProps) {
   const [view, setView] = useState<SidebarView>(() => readSidebarView());
   const [cardOrder, setCardOrder] = useState<SidebarCardId[]>(() => loadSidebarOrder());
   const batteryPercent = clampBatteryPercent(telemetry.battery.remainingPercent);
@@ -40,7 +48,16 @@ export function TelemetrySidebar({ telemetry, distanceFromHome, alerts, prefligh
   }, [cardOrder]);
 
   return (
-    <aside className="z-10 flex w-[320px] shrink-0 flex-col gap-3 overflow-y-auto border-r border-cyan-300/10 bg-slate-950/78 p-3 backdrop-blur">
+    <aside
+      className={`z-10 flex w-[320px] shrink-0 flex-col gap-3 overflow-y-auto border-r border-cyan-300/10 bg-slate-950/78 p-3 backdrop-blur ${
+        telemetryStale ? "opacity-70 saturate-75" : ""
+      }`}
+    >
+      {telemetryStale && (
+        <div className="rounded border border-amber-400/40 bg-amber-950/40 px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-200">
+          Link stale — data may be outdated
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Telemetry</span>
         <div className="flex items-center gap-1.5">
