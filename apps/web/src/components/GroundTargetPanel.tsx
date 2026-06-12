@@ -42,10 +42,18 @@ export function GroundTargetPanel({
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Badge tone={qualityTone}>{estimate?.quality ?? "idle"}</Badge>
         {liveOnlyBlocked && <Badge tone="warn">live only</Badge>}
-        {estimate?.valid === false && estimate.reasons.length > 0 && (
-          <span className="font-mono text-[10px] uppercase tracking-wider text-slate-400">{estimate.reasons.join(", ")}</span>
+        {(estimate?.reasons.length ?? 0) > 0 && (
+          <span className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
+            {estimate!.reasons.map(formatTargetReason).join(" · ")}
+          </span>
         )}
       </div>
+
+      {estimate?.quality === "warn" && (
+        <p className="mb-2 text-[10px] leading-snug text-amber-200/90">
+          Warn estimate — verify gimbal calibration, altitude datum, and terrain before acting on coordinates.
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-2">
         <Metric label="Target Lat" value={formatNumber(estimate?.lat, 6)} tone={metricTone(estimate)} />
