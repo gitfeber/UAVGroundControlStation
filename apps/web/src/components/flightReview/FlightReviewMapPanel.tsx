@@ -53,8 +53,8 @@ export function FlightReviewMapPanel({ path, sessionHome, currentPosition }: Fli
       map = new maplibregl.Map({
         container: containerRef.current,
         style: buildMapStyle(loadMapBasemapId()),
-        center: fitBounds[0] ?? [8, 47],
-        zoom: fitBounds.length > 0 ? 14 : 5,
+        center: [8, 47],
+        zoom: 5,
         attributionControl: { compact: true }
       });
       mapRef.current = map;

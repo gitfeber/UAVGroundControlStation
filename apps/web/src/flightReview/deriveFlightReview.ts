@@ -1,4 +1,4 @@
-import type { NormalizedReplayEvent, ReplayLogMetadata, TelemetryState } from "@uav-ground-control-station/shared";
+import type { ReplayLogMetadata, TelemetryState } from "@uav-ground-control-station/shared";
 import { DEFAULT_PREFLIGHT_THRESHOLDS } from "../lib/preflightThresholds";
 import { haversineDistanceM, validCoordinate } from "../lib/geo";
 import { normalizeTelemetryState } from "../lib/initialTelemetry";
@@ -11,7 +11,6 @@ import {
   type FlightReviewFinding,
   type FlightReviewFullStats,
   type FlightReviewInput,
-  type FlightReviewMetadata,
   type FlightReviewPathVertex,
   type FlightReviewRenderSeries,
   type FlightReviewResult,
@@ -416,7 +415,6 @@ function buildSummary(
   let armedDurationMs = 0;
   let flightModeChanges = 0;
   let prevMode: string | null = null;
-  let prevArmed = false;
   let prevTimeMs = samples[0]!.timeMs;
 
   for (const sample of samples) {
@@ -445,7 +443,6 @@ function buildSummary(
     const mode = sample.state.vehicle.flightMode;
     if (prevMode !== null && mode !== prevMode) flightModeChanges += 1;
     prevMode = mode;
-    prevArmed = sample.state.vehicle.armed;
     prevTimeMs = sample.timeMs;
   }
 
