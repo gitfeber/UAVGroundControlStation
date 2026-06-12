@@ -16,31 +16,43 @@ function ReviewGraph({
   label,
   unit,
   points,
+  secondary,
   currentTimeMs,
   durationMs,
   onSeek,
   color = "#22d3ee"
-}: GraphProps) {
+}: GraphProps & {
+  secondary?: { label: string; unit: string; points: { timeMs: number; value: number }[]; color?: string };
+}) {
   const width = 400;
   const height = 120;
   const pad = 8;
 
-  const { path, minY, maxY } = useMemo(() => {
-    if (points.length === 0) return { path: "", minY: 0, maxY: 1 };
-    const values = points.map((p) => p.value);
+  const { path, minY, maxY, secondaryPath } = useMemo(() => {
+    const allPoints = secondary ? [...points, ...secondary.points] : points;
+    if (allPoints.length === 0) return { path: "", minY: 0, maxY: 1, secondaryPath: "" };
+    const values = allPoints.map((p) => p.value);
     const minY = Math.min(...values);
     const maxY = Math.max(...values);
     const spanY = maxY - minY || 1;
     const maxX = Math.max(1, durationMs);
 
-    const coords = points.map((p) => {
-      const x = pad + ((width - pad * 2) * p.timeMs) / maxX;
-      const y = height - pad - ((height - pad * 2) * (p.value - minY)) / spanY;
-      return `${x},${y}`;
-    });
+    const toPath = (series: { timeMs: number; value: number }[]) =>
+      series
+        .map((p) => {
+          const x = pad + ((width - pad * 2) * p.timeMs) / maxX;
+          const y = height - pad - ((height - pad * 2) * (p.value - minY)) / spanY;
+          return `${x},${y}`;
+        })
+        .join(" ");
 
-    return { path: coords.join(" "), minY, maxY };
-  }, [points, durationMs]);
+    return {
+      path: toPath(points),
+      secondaryPath: secondary ? toPath(secondary.points) : "",
+      minY,
+      maxY
+    };
+  }, [points, secondary, durationMs]);
 
   const playheadX = pad + ((width - pad * 2) * currentTimeMs) / Math.max(1, durationMs);
 
@@ -65,6 +77,15 @@ function ReviewGraph({
       >
         <rect x={0} y={0} width={width} height={height} fill="transparent" />
         {path && <polyline fill="none" stroke={color} strokeWidth={1.5} points={path} />}
+        {secondary && secondaryPath && (
+          <polyline
+            fill="none"
+            stroke={secondary.color ?? "#94a3b8"}
+            strokeWidth={1.25}
+            strokeDasharray="4 3"
+            points={secondaryPath}
+          />
+        )}
         <line x1={playheadX} x2={playheadX} y1={pad} y2={height - pad} stroke="#f8fafc" strokeWidth={1} opacity={0.7} />
       </svg>
       <div className="mt-1 flex justify-between font-mono text-[10px] text-slate-500">
@@ -98,7 +119,16 @@ export function FlightReviewGraphs({
       <ReviewGraph label="Altitude" unit="m" points={series.altitude} currentTimeMs={currentTimeMs} durationMs={durationMs} onSeek={onSeek} />
       <ReviewGraph label="Speed" unit="m/s" points={series.speed} currentTimeMs={currentTimeMs} durationMs={durationMs} onSeek={onSeek} color="#a855f7" />
       <ReviewGraph label="Battery" unit="V" points={series.batteryVoltage} currentTimeMs={currentTimeMs} durationMs={durationMs} onSeek={onSeek} color="#22c55e" />
-      <ReviewGraph label="Link quality" unit="%" points={series.linkQuality} currentTimeMs={currentTimeMs} durationMs={durationMs} onSeek={onSeek} color="#fbbf24" />
+      <ReviewGraph
+        label="Link / RSSI"
+        unit="mixed"
+        points={series.linkQuality}
+        secondary={{ label: "RSSI", unit: "dBm", points: series.rssi, color: "#94a3b8" }}
+        currentTimeMs={currentTimeMs}
+        durationMs={durationMs}
+        onSeek={onSeek}
+        color="#fbbf24"
+      />
       <ReviewGraph label="GPS quality" unit="score" points={gpsQuality} currentTimeMs={currentTimeMs} durationMs={durationMs} onSeek={onSeek} color="#38bdf8" />
     </div>
   );
