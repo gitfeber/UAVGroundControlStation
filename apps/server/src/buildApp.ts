@@ -1,16 +1,24 @@
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import type { ConnectRequest, TelemetryState } from "@uav-ground-control-station/shared";
 import { LoggerService } from "./services/loggerService.js";
 import { SerialMavlinkService } from "./services/serialMavlinkService.js";
 import type { SerialService } from "./services/serialService.js";
 import { WebSocketHub } from "./services/websocketHub.js";
+import { validateControlRequestOrigin } from "./requestOriginSafety.js";
 import {
   connectRouteSchema,
   validateBaudRate,
   validateSerialPortPath
 } from "./validation/connectRequest.js";
+
+async function guardControlRoute(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const originError = validateControlRequestOrigin(request);
+  if (originError) {
+    reply.code(403).send({ error: originError });
+  }
+}
 
 export interface AppServices {
   serial: SerialService;
@@ -50,6 +58,10 @@ export async function buildApp(services?: Partial<AppServices>): Promise<Fastify
     {
       schema: connectRouteSchema,
       preHandler: async (request, reply) => {
+        await guardControlRoute(request, reply);
+        if (reply.sent) {
+          return;
+        }
         const body = request.body;
         const pathError = validateSerialPortPath(body.path);
         if (pathError) {
@@ -74,15 +86,15 @@ export async function buildApp(services?: Partial<AppServices>): Promise<Fastify
     }
   );
 
-  app.post("/api/disconnect", async () => serial.disconnect());
+  app.post("/api/disconnect", { preHandler: guardControlRoute }, async () => serial.disconnect());
 
-  app.post("/api/reset", async () => serial.resetSession());
+  app.post("/api/reset", { preHandler: guardControlRoute }, async () => serial.resetSession());
 
   app.get("/api/status", async () => serial.getStatus());
 
-  app.post("/api/logging/start", async () => logger.start());
+  app.post("/api/logging/start", { preHandler: guardControlRoute }, async () => logger.start());
 
-  app.post("/api/logging/stop", async () => logger.stop());
+  app.post("/api/logging/stop", { preHandler: guardControlRoute }, async () => logger.stop());
 
   app.get("/api/logging/status", async () => logger.status());
 
