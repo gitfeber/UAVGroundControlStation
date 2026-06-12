@@ -66,7 +66,7 @@ export function buildOnboardingSteps(runtimeMode: RuntimeMode): DriveStep[] {
         title: "Serial link",
         description: serialConnectDescription(runtimeMode),
         side: "bottom",
-        align: "start"
+        align: "center"
       }
     },
     {
@@ -75,7 +75,7 @@ export function buildOnboardingSteps(runtimeMode: RuntimeMode): DriveStep[] {
         title: "Link health",
         description:
           "Watch Telemetry live, bridge status, packet counts, and last-packet age here. If telemetry goes quiet for more than 3 seconds in Live mode, stale-data indicators appear across the dashboard.",
-        side: "bottom",
+        side: "left",
         align: "end"
       },
       runtimes: ["desktop", "web"]
@@ -86,7 +86,7 @@ export function buildOnboardingSteps(runtimeMode: RuntimeMode): DriveStep[] {
         title: "Link health",
         description:
           "These badges show whether Web Serial is active, how many packets arrived, and how fresh the last frame is. Stale live telemetry (>3 s) dims parts of the UI with warning banners.",
-        side: "bottom",
+        side: "left",
         align: "end"
       },
       runtimes: ["cloud"]
@@ -106,8 +106,8 @@ export function buildOnboardingSteps(runtimeMode: RuntimeMode): DriveStep[] {
       popover: {
         title: "Sidebar view",
         description: "Switch between Text metrics and Inst mini-gauges. Both views share the same card order and telemetry fields.",
-        side: "left",
-        align: "start"
+        side: "bottom",
+        align: "center"
       }
     },
     {
@@ -135,8 +135,8 @@ export function buildOnboardingSteps(runtimeMode: RuntimeMode): DriveStep[] {
         title: "Live map",
         description:
           "MapLibre shows your UAV position, up to 5000 track points, home reference, and ground-target markers with line-of-sight when estimation is valid.",
-        side: "left",
-        align: "center"
+        side: "right",
+        align: "start"
       }
     },
     {
@@ -154,8 +154,8 @@ export function buildOnboardingSteps(runtimeMode: RuntimeMode): DriveStep[] {
       popover: {
         title: "Map basemap",
         description: "Switch between Tactical, Satellite, and Topo styles. Your choice is saved locally for the next session.",
-        side: "left",
-        align: "start"
+        side: "bottom",
+        align: "end"
       },
       when: () => isMapBasemapSwitcherEnabled()
     },
@@ -164,7 +164,7 @@ export function buildOnboardingSteps(runtimeMode: RuntimeMode): DriveStep[] {
       popover: {
         title: "Clear track",
         description: "Removes the accumulated flight path from the map without disconnecting serial or resetting telemetry. Useful when starting a new flight segment.",
-        side: "right",
+        side: "top",
         align: "start"
       }
     },
@@ -184,8 +184,8 @@ export function buildOnboardingSteps(runtimeMode: RuntimeMode): DriveStep[] {
         title: "Activity log",
         description:
           "Connection events, parser stats, and per-frame MAVLink message counts. Open to inspect warnings; Clear wipes the session log without affecting the serial link.",
-        side: "top",
-        align: "start"
+        side: "right",
+        align: "end"
       }
     },
     {
@@ -194,7 +194,7 @@ export function buildOnboardingSteps(runtimeMode: RuntimeMode): DriveStep[] {
         title: "Ground target",
         description: groundTargetDescription(runtimeMode),
         side: "right",
-        align: "start"
+        align: "center"
       }
     },
     {

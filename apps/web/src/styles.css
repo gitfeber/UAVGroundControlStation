@@ -509,19 +509,51 @@ button:disabled {
   box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.8), 0 18px 48px rgba(2, 6, 23, 0.65);
   color: #e2e8f0;
   max-width: min(22rem, calc(100vw - 2rem));
+  padding: 0.85rem 0.9rem 0.75rem;
 }
 
-.gcs-driver-popover .driver-popover-title {
+.gcs-driver-popover-shell {
+  padding-top: 1.65rem;
+}
+
+.gcs-driver-popover .driver-popover-title,
+.gcs-driver-popover .gcs-driver-popover-title-row {
   font-size: 0.95rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #a5f3fc;
+  padding-right: 3.25rem;
+  line-height: 1.35;
+}
+
+.gcs-driver-popover .driver-popover-close-btn.gcs-driver-skip {
+  all: unset;
+  position: absolute;
+  top: 0.7rem;
+  right: 0.75rem;
+  z-index: 2;
+  cursor: pointer;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #64748b;
+  padding: 0.15rem 0.2rem;
+  line-height: 1;
+  transition: color 120ms ease;
+}
+
+.gcs-driver-popover .driver-popover-close-btn.gcs-driver-skip:hover,
+.gcs-driver-popover .driver-popover-close-btn.gcs-driver-skip:focus-visible {
+  color: #94a3b8;
+  outline: none;
 }
 
 .gcs-driver-popover .driver-popover-description {
   font-size: 0.84rem;
   line-height: 1.5;
   color: #cbd5e1;
+  margin-top: 0.35rem;
 }
 
 .gcs-driver-popover .driver-popover-progress-text {
@@ -532,16 +564,22 @@ button:disabled {
   color: #64748b;
 }
 
+.gcs-driver-popover .driver-popover-footer {
+  margin-top: 0.85rem;
+  gap: 0.5rem;
+}
+
 .gcs-driver-popover .driver-popover-footer button {
   border-radius: 0.5rem;
   border: 1px solid rgba(34, 211, 238, 0.22);
   font-size: 0.78rem;
   font-weight: 700;
   text-shadow: none;
+  min-height: 1.85rem;
+  padding: 0.2rem 0.7rem;
 }
 
-.gcs-driver-popover .driver-popover-prev-btn,
-.gcs-driver-popover .driver-popover-close-btn {
+.gcs-driver-popover .driver-popover-prev-btn {
   background: rgba(15, 23, 42, 0.9);
   color: #cbd5e1;
 }
@@ -550,6 +588,10 @@ button:disabled {
 .gcs-driver-popover .driver-popover-done-btn {
   background: rgba(34, 211, 238, 0.16);
   color: #a5f3fc;
+}
+
+.gcs-driver-popover .driver-popover-close-btn:not(.gcs-driver-skip) {
+  display: none;
 }
 
 .gcs-driver-popover .driver-popover-arrow {

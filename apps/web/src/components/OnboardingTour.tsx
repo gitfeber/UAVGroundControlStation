@@ -50,13 +50,14 @@ export function OnboardingTour({ active, runtimeMode, restartToken }: Onboarding
         overlayOpacity: 0.62,
         stagePadding: 8,
         stageRadius: 10,
+        popoverOffset: 14,
         popoverClass: "gcs-driver-popover",
         overlayColor: "#020617",
-        showButtons: ["previous", "next", "close"],
+        showButtons: ["previous", "next"],
         steps,
         onPopoverRender: (popover) => {
-          popover.closeButton.textContent = "Skip tour";
-          popover.closeButton.setAttribute("aria-label", "Skip onboarding tour");
+          styleTourSkipControl(popover);
+          clampPopoverToViewport(popover.wrapper);
         },
         onDestroyed: () => {
           markOnboardingComplete();
@@ -94,4 +95,43 @@ function filterVisibleSteps(steps: DriveStep[]): DriveStep[] {
 
     return document.contains(step.element);
   });
+}
+
+function styleTourSkipControl(popover: {
+  closeButton: HTMLButtonElement;
+  title: HTMLElement;
+  wrapper: HTMLElement;
+}): void {
+  popover.closeButton.textContent = "Skip";
+  popover.closeButton.setAttribute("aria-label", "Skip onboarding tour");
+  popover.closeButton.classList.add("gcs-driver-skip");
+
+  popover.title.classList.add("gcs-driver-popover-title-row");
+  popover.wrapper.classList.add("gcs-driver-popover-shell");
+}
+
+function clampPopoverToViewport(wrapper: HTMLElement, margin = 12): void {
+  const rect = wrapper.getBoundingClientRect();
+  let left = rect.left;
+  let top = rect.top;
+
+  if (rect.right > window.innerWidth - margin) {
+    left -= rect.right - (window.innerWidth - margin);
+  }
+  if (rect.left < margin) {
+    left += margin - rect.left;
+  }
+  if (rect.bottom > window.innerHeight - margin) {
+    top -= rect.bottom - (window.innerHeight - margin);
+  }
+  if (rect.top < margin) {
+    top += margin - rect.top;
+  }
+
+  if (left !== rect.left) {
+    wrapper.style.left = `${Math.round(left)}px`;
+  }
+  if (top !== rect.top) {
+    wrapper.style.top = `${Math.round(top)}px`;
+  }
 }
