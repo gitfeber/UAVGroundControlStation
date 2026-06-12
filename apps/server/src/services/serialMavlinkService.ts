@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import type { Readable } from "node:stream";
 import mavlink from "node-mavlink";
 import type { MavLinkPacket } from "node-mavlink";
 import { SerialPort } from "serialport";
@@ -11,6 +12,7 @@ const { createMavLinkStream } = mavlink as typeof import("node-mavlink");
 export class SerialMavlinkService extends EventEmitter {
   private readonly store = new TelemetryStore();
   private port: SerialPort | null = null;
+  private mavlinkStream: Readable | null = null;
   private serialConnected = false;
   private rawBytes = 0;
   private parserErrors = 0;
@@ -69,6 +71,7 @@ export class SerialMavlinkService extends EventEmitter {
         console.warn(`Dropped MAVLink packet with invalid CRC (${packet.length} bytes).`);
       }
     });
+    this.mavlinkStream = mavlinkStream;
 
     port.on("data", (chunk: Buffer) => {
       this.rawBytes += chunk.length;
@@ -78,6 +81,7 @@ export class SerialMavlinkService extends EventEmitter {
       this.parserErrors += 1;
       this.lastSerialError = error instanceof Error ? error.message : String(error);
       console.error("MAVLink parser error:", error);
+      void this.disconnect();
     });
 
     port.on("close", () => {
@@ -88,6 +92,7 @@ export class SerialMavlinkService extends EventEmitter {
     port.on("error", (error) => {
       this.lastSerialError = error.message;
       console.error("Serial port error:", error);
+      void this.disconnect();
     });
 
     this.emitTelemetry();
@@ -95,17 +100,29 @@ export class SerialMavlinkService extends EventEmitter {
   }
 
   async disconnect(): Promise<BackendStatus> {
-    if (this.port?.isOpen) {
-      const port = this.port;
-      await new Promise<void>((resolve, reject) => {
-        port.close((error) => {
-          if (error) reject(error);
-          else resolve();
-        });
-      });
-    }
+    const port = this.port;
+    const stream = this.mavlinkStream;
 
     this.port = null;
+    this.mavlinkStream = null;
+
+    if (stream) {
+      stream.removeAllListeners();
+      stream.destroy();
+    }
+
+    if (port) {
+      port.removeAllListeners();
+      if (port.isOpen) {
+        await new Promise<void>((resolve, reject) => {
+          port.close((error) => {
+            if (error) reject(error);
+            else resolve();
+          });
+        });
+      }
+    }
+
     this.serialConnected = false;
     this.store.setConnected(false);
     this.emitTelemetry();
