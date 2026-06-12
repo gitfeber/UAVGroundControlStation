@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import type { TargetEstimate } from "@uav-ground-control-station/shared";
 import { formatNumber } from "../lib/format";
+import { sanitizeHttpUrl } from "../lib/safeHttpUrl";
 import { Badge } from "./Panel";
 
 type VideoKind = "mjpeg" | "hls" | "webrtc";
 
-const defaultUrl = import.meta.env.VITE_VIDEO_URL ?? "";
+const defaultUrl = sanitizeHttpUrl(import.meta.env.VITE_VIDEO_URL ?? "");
 const defaultKind = (import.meta.env.VITE_VIDEO_KIND as VideoKind | undefined) ?? "mjpeg";
 
 interface VideoPanelProps {
@@ -14,7 +15,7 @@ interface VideoPanelProps {
 
 export function VideoPanel({ estimate }: VideoPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const [url, setUrl] = useState(() => localStorage.getItem("uav-gcs.video.url") ?? defaultUrl);
+  const [url, setUrl] = useState(() => sanitizeHttpUrl(localStorage.getItem("uav-gcs.video.url") ?? defaultUrl));
   const [kind, setKind] = useState<VideoKind>(() => (localStorage.getItem("uav-gcs.video.kind") as VideoKind | null) ?? defaultKind);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const dragOffsetRef = useRef<{ x: number; y: number } | null>(null);
@@ -88,7 +89,12 @@ export function VideoPanel({ estimate }: VideoPanelProps) {
               <option value="hls">HLS</option>
               <option value="webrtc">WebRTC</option>
             </select>
-            <input className="input-dark" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="Video URL" />
+            <input
+              className="input-dark"
+              value={url}
+              onChange={(event) => setUrl(sanitizeHttpUrl(event.target.value))}
+              placeholder="Video URL (http/https)"
+            />
           </div>
         </>
       )}
@@ -112,12 +118,17 @@ function VideoTargetStrip({ estimate }: { estimate: TargetEstimate | null }) {
 }
 
 function VideoContent({ url, kind }: { url: string; kind: VideoKind }) {
+  const safeUrl = sanitizeHttpUrl(url);
+  if (!safeUrl) {
+    return <div className="flex h-full items-center justify-center text-sm text-slate-500">Invalid or unsupported video URL</div>;
+  }
+
   if (kind === "mjpeg") {
-    return <img className="h-full w-full object-cover" src={url} alt="Camera feed" />;
+    return <img className="h-full w-full object-cover" src={safeUrl} alt="Camera feed" />;
   }
 
   if (kind === "hls") {
-    return <video className="h-full w-full object-cover" src={url} controls muted playsInline />;
+    return <video className="h-full w-full object-cover" src={safeUrl} controls muted playsInline />;
   }
 
   return (

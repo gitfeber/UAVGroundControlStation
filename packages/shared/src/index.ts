@@ -332,6 +332,7 @@ export interface SimulationOptions {
 // ---------------------------------------------------------------------------
 
 export { TelemetryStore, createInitialTelemetryState } from "./telemetry/telemetryStore.js";
+export { finiteNumber, finiteOrNull } from "./telemetry/finiteNumber.js";
 export { applyMavlinkFrame, messageIds } from "./telemetry/mavlinkDispatch.js";
 export type { MavlinkFrame } from "./telemetry/mavlinkDispatch.js";
 export { applyCrsfFrame, crsfMessageId, crsfMessageLabel, CRSF_STAT_BASE } from "./telemetry/crsfDispatch.js";

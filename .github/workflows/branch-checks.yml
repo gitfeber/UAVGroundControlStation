@@ -46,6 +46,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
+      - run: pnpm audit:js
       - run: pnpm build
       - run: pnpm build:cloud
 

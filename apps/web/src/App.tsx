@@ -137,6 +137,7 @@ export function App() {
             alerts={alerts}
             preflight={preflight}
             targetEstimation={targetEstimation}
+            telemetryStale={telemetryStale}
           />
           <ErrorBoundary>
             <MapPanel

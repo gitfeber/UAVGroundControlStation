@@ -1,6 +1,6 @@
 {
   "name": "uav-ground-control-station",
-  "version": "0.2.27",
+  "version": "0.2.33",
   "private": true,
   "description": "Local browser-based MAVLink ground control station for UAVs.",
   "license": "GPL-3.0-only",
@@ -18,7 +18,8 @@
     "lint": "pnpm -r lint",
     "test": "pnpm --filter @uav-ground-control-station/shared build && pnpm --filter @uav-ground-control-station/target-estimation test && pnpm --filter @uav-ground-control-station/server test && pnpm --filter @uav-ground-control-station/web test",
     "typecheck": "pnpm --filter @uav-ground-control-station/shared build && pnpm --filter @uav-ground-control-station/shared typecheck && pnpm --filter @uav-ground-control-station/target-estimation build && pnpm --filter @uav-ground-control-station/target-estimation typecheck && pnpm --filter @uav-ground-control-station/server typecheck && pnpm --filter @uav-ground-control-station/web typecheck",
-    "audit:desktop": "cd apps/desktop/src-tauri && cargo audit"
+    "audit:desktop": "cd apps/desktop/src-tauri && cargo audit",
+    "audit:js": "pnpm audit --prod"
   },
   "devDependencies": {
     "@eslint/js": "latest",
@@ -32,6 +33,7 @@
   },
   "pnpm": {
     "overrides": {
+      "esbuild": "^0.28.1",
       "xml2js": "^0.5.0"
     }
   }
