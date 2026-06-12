@@ -3,6 +3,7 @@ import { getAlerts } from "./lib/alerts";
 import { evaluatePreflightHealth } from "./lib/preflight";
 import { haversineDistanceM, type Coordinate, validCoordinate } from "./lib/geo";
 import { packetAge } from "./lib/format";
+import { isTelemetryStale } from "./lib/telemetryStaleness";
 import { useTelemetrySource } from "./hooks/useTelemetrySource";
 import { useTargetEstimation } from "./hooks/useTargetEstimation";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -95,6 +96,11 @@ export function App() {
     [telemetry, now, activeSourceMode, home]
   );
 
+  const telemetryStale = useMemo(
+    () => activeSourceMode === "live" && isTelemetryStale(telemetry.lastPacketAt, now),
+    [activeSourceMode, telemetry.lastPacketAt, now]
+  );
+
   return (
     <>
       <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
@@ -138,6 +144,7 @@ export function App() {
               coordinate={coordinate}
               home={home}
               groundTarget={targetEstimation.estimate}
+              telemetryStale={telemetryStale}
               trackMode={isControlledTrack ? "controlled" : "internal"}
               controlledTrack={replay.replayTrack}
             />

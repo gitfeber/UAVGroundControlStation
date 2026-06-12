@@ -54,7 +54,7 @@ Prefer bench testing and disconnected telemetry validation before using the soft
 
 ## Features
 
-- **Live map** with flight track (up to 5000 points), home reference, distance, bottom-center **Attitude HUD** (pitch ladder, roll arc, heading tape, speed/altitude, climb bar, armed/mode), and in-app **basemap switcher** (Tactical / Satellite / Topo; persisted in `localStorage` as `uav-gcs.map.basemap`)
+- **Live map** with flight track (up to 5000 points), home reference, distance, bottom-center **Attitude HUD** (pitch ladder, roll arc, heading tape, speed/altitude, climb bar, armed/mode; dims with a **Stale** banner when live telemetry is older than 3 s), and in-app **basemap switcher** (Tactical / Satellite / Topo; persisted in `localStorage` as `uav-gcs.map.basemap`)
 - **Telemetry sidebar** — **Text** or **Inst** (mini gauges with the same telemetry fields as text mode); drag card headers (⠿) to reorder (shared order for both views, stored in `uav-gcs.sidebar.order`); **Reset** restores recommended flight-priority order; alerts stay fixed at the top
 - **Serial link** — port picker (USB/PNP preferred), manual path entry, common baud rates
 - **Activity log** — connection status, parser stats, frame message stats
