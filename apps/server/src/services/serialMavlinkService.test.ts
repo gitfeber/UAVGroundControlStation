@@ -1,19 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { MockEventEmitter, mockDestroy } = vi.hoisted(() => {
-  const { EventEmitter } = require("node:events");
-  const mockDestroy = vi.fn();
-  return { MockEventEmitter: EventEmitter, mockDestroy };
-});
+const mockDestroy = vi.hoisted(() => vi.fn());
 
 vi.mock("serialport", () => {
-  class MockSerialPort extends MockEventEmitter {
+  class MockSerialPort {
     isOpen = true;
     open = vi.fn((callback: (error?: Error | null) => void) => callback());
     close = vi.fn((callback: (error?: Error | null) => void) => {
       this.isOpen = false;
       callback();
     });
+    removeAllListeners = vi.fn();
+    on = vi.fn();
     static list = vi.fn(async () => []);
   }
 
@@ -22,11 +20,11 @@ vi.mock("serialport", () => {
 
 vi.mock("node-mavlink", () => ({
   default: {
-    createMavLinkStream: vi.fn(() => {
-      const stream = new MockEventEmitter();
-      (stream as { destroy: () => void }).destroy = mockDestroy;
-      return stream;
-    })
+    createMavLinkStream: vi.fn(() => ({
+      on: vi.fn(),
+      removeAllListeners: vi.fn(),
+      destroy: mockDestroy
+    }))
   }
 }));
 
