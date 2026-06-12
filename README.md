@@ -62,6 +62,7 @@ Prefer bench testing and disconnected telemetry validation before using the soft
 - **Ground target estimation** (desktop) — image-center target with GeoTIFF DEM ray marching, map marker, line-of-sight, and sample-log export
 - **Preflight health advisory** — sensor and link health checks with configurable thresholds
 - **Session logging** and reset for new flights
+- **Onboarding tour** — first-run walkthrough of link controls, telemetry sidebar, map, camera, and activity log; skip anytime; restart from the **?** button in the top bar (`localStorage` keys `uav-gcs.onboarding.*`)
 - **Replay & Simulation** — frontend-only, read-only telemetry sources that drive the same dashboard without hardware: replay recorded `.jsonl`/`.json` logs (start/pause/seek/step, speed and timing modes) or run deterministic seeded simulations. See [`docs/replay-mode.md`](docs/replay-mode.md) and [`docs/adr/0003-frontend-only-replay-simulation.md`](docs/adr/0003-frontend-only-replay-simulation.md)
 - **Shared data model** [`TelemetryState`](packages/shared/src/index.ts) for desktop and browser
 
@@ -191,6 +192,10 @@ pnpm --filter @uav-ground-control-station/web preview
 ```
 
 ## Operator notes
+
+### Onboarding tour
+
+On first launch (after the optional splash screen), a guided tour highlights the top bar, telemetry sidebar, map, camera panel, and activity log. Click **Skip tour** to dismiss it; completion is stored per runtime in `localStorage` (`uav-gcs.onboarding.completed`, `uav-gcs.onboarding.version`). Desktop, browser dev, and Hosted Web App each keep their own completion state. Reopen the tour anytime with the **?** button in the top bar.
 
 ### Serial link
 
