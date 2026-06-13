@@ -18,6 +18,7 @@ import { SplashScreen } from "./components/SplashScreen";
 import { OnboardingTour } from "./components/OnboardingTour";
 import { useFlightReviewAnalysis, type ActiveView } from "./flightReview";
 import { getRemoteSerialControlApiBanner } from "./lib/apiSafety";
+import { resolveLinkIssues } from "./lib/linkErrors";
 import { webSerialUnsupportedReason } from "./link/webSerialSupport";
 
 const ENABLE_SPLASH_SCREEN = import.meta.env.VITE_ENABLE_SPLASH_SCREEN !== "false";
@@ -34,6 +35,7 @@ export function App() {
     ports,
     logs,
     error,
+    linkConnection,
     wsConnected,
     runtimeMode,
     refreshPorts,
@@ -132,6 +134,18 @@ export function App() {
     [activeSourceMode, telemetry.lastPacketAt, now]
   );
 
+  const linkIssues = useMemo(
+    () =>
+      resolveLinkIssues({
+        status,
+        connectError: error,
+        connection: linkConnection,
+        nowMs: now,
+        liveMode: activeSourceMode === "live"
+      }),
+    [status, error, linkConnection, now, activeSourceMode]
+  );
+
   return (
     <>
       <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
@@ -157,6 +171,7 @@ export function App() {
           onStartLogging={startLogging}
           onStopLogging={stopLogging}
           onRestartTour={() => setTourRestartToken((token) => token + 1)}
+          linkIssues={linkIssues}
         />
 
         {cloudUnsupported && <CloudUnsupportedBanner reason={cloudUnsupported} />}
@@ -188,7 +203,7 @@ export function App() {
                   controlledTrack={replay.replayTrack}
                 />
               </ErrorBoundary>
-              <ActivityLogPanel logs={logs} messages={status.mavlinkMessages ?? []} onClear={clearLogs} />
+              <ActivityLogPanel logs={logs} messages={status.mavlinkMessages ?? []} onClear={clearLogs} linkIssues={linkIssues} />
               <VideoPanel targetEstimation={targetEstimation} />
 
               {activeSourceMode !== "live" && (

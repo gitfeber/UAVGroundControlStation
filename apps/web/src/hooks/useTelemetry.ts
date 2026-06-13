@@ -9,6 +9,16 @@ import type {
   TelemetryState
 } from "@uav-ground-control-station/shared";
 import { createEmptyTelemetryState, normalizeTelemetryState } from "../lib/initialTelemetry";
+import {
+  connectFailureMessage,
+  describeConnectFailure,
+  describeNoParsedFrames,
+  describeNoRawBytes,
+  describeParserSpike,
+  describeSerialError,
+  linkIssueLogMessage,
+  type LinkConnection
+} from "../lib/linkErrors";
 import { runtimeMode } from "../lib/runtimeMode";
 import { WebSerialLink } from "../link/webSerialLink";
 
@@ -77,6 +87,7 @@ export function useTelemetry() {
   const [ports, setPorts] = useState<SerialPortInfo[]>([]);
   const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [linkConnection, setLinkConnection] = useState<LinkConnection | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
   const statusRef = useRef(status);
   const lastStatusRef = useRef(status);
@@ -148,15 +159,17 @@ export function useTelemetry() {
     if (mode === "cloud") {
       const baudRate = request.baudRate ?? CLOUD_DEFAULT_BAUD;
       activeConnectionRef.current = { path: "Web Serial device", baudRate, startedAt: Date.now() };
+      setLinkConnection(activeConnectionRef.current);
       addLog("info", `Opening a serial device at ${baudRate} baud via the browser picker.`);
       try {
         await webSerialLinkRef.current?.connect(baudRate);
         // Success is logged by the link's onOpen callback; telemetry flows via callbacks.
       } catch (cause: unknown) {
         activeConnectionRef.current = null;
-        const message = cause instanceof Error ? cause.message : "Unable to open the serial device.";
+        setLinkConnection(null);
+        const message = connectFailureMessage(cause);
         setError(message);
-        addLog("error", `Connect failed: ${message}`);
+        addLog("error", linkIssueLogMessage(describeConnectFailure(cause)));
         throw cause;
       }
       return;
@@ -167,6 +180,7 @@ export function useTelemetry() {
       baudRate: request.baudRate ?? 420000,
       startedAt: Date.now()
     };
+    setLinkConnection(activeConnectionRef.current);
     addLog("info", `Opening ${request.path} at ${request.baudRate ?? 420000} baud.`);
 
     try {
@@ -182,10 +196,11 @@ export function useTelemetry() {
       }
       addLog("success", `Serial port opened: ${request.path}. 8N1/no-flow-control, DTR/RTS enabled, initial GCS heartbeat written.`);
     } catch (cause: unknown) {
-      const message = cause instanceof Error ? cause.message : "Unable to connect serial port.";
+      const message = connectFailureMessage(cause);
       activeConnectionRef.current = null;
+      setLinkConnection(null);
       setError(message);
-      addLog("error", `Connect failed: ${message}`);
+      addLog("error", linkIssueLogMessage(describeConnectFailure(cause)));
       throw cause;
     }
   }, [addLog, mode]);
@@ -196,6 +211,7 @@ export function useTelemetry() {
       await webSerialLinkRef.current?.disconnect("Disconnected by operator.");
       addLog("info", "Serial device disconnected.");
       activeConnectionRef.current = null;
+      setLinkConnection(null);
       return;
     }
     if (mode === "desktop") {
@@ -205,6 +221,7 @@ export function useTelemetry() {
     }
     addLog("info", "Serial port disconnected.");
     activeConnectionRef.current = null;
+    setLinkConnection(null);
   }, [addLog, mode]);
 
   const resetSession = useCallback(async () => {
@@ -273,7 +290,9 @@ export function useTelemetry() {
       onClose: (reason) => {
         setWsConnected(false);
         activeConnectionRef.current = null;
-        addLog("warning", `Serial link closed: ${reason}`);
+        setLinkConnection(null);
+        const issue = describeSerialError(reason);
+        addLog("warning", issue ? linkIssueLogMessage(issue) : `Serial link closed: ${reason}`);
       }
     });
     webSerialLinkRef.current = link;
@@ -310,14 +329,17 @@ export function useTelemetry() {
 
     if (
       status.serialConnected &&
-      (status.parserErrors ?? 0) > (previous.parserErrors ?? 0) &&
-      (status.parserErrors ?? 0) > (status.mavlinkPackets ?? 0) * 4
+      (status.parserErrors ?? 0) > (previous.parserErrors ?? 0)
     ) {
-      addLog("warning", `Parser errors increased to ${status.parserErrors}. Check baud rate or protocol.`);
+      const issue = describeParserSpike(status);
+      if (issue) {
+        addLog("warning", linkIssueLogMessage(issue));
+      }
     }
 
     if (status.lastSerialError && status.lastSerialError !== previous.lastSerialError) {
-      addLog("error", `Serial error: ${status.lastSerialError}`);
+      const issue = describeSerialError(status.lastSerialError);
+      addLog("error", issue ? linkIssueLogMessage(issue) : `Serial error: ${status.lastSerialError}`);
     }
 
     lastStatusRef.current = status;
@@ -336,20 +358,12 @@ export function useTelemetry() {
 
       if (elapsedMs > 3000 && rawBytes === 0 && !warningStateRef.current.noRawBytes) {
         warningStateRef.current.noRawBytes = true;
-        addLog(
-          "warning",
-          txBytes > 0
-            ? `No serial bytes after 3s on ${connection.path}, although the app sent ${txBytes.toLocaleString()} wake-up bytes. The FC is not responding on this port.`
-            : `No serial bytes after 3s on ${connection.path}. Check USB mode, cable, driver, selected COM port, and whether telemetry is enabled.`
-        );
+        addLog("warning", linkIssueLogMessage(describeNoRawBytes(connection, txBytes)));
       }
 
       if (elapsedMs > 5000 && rawBytes > 0 && packets === 0 && !warningStateRef.current.noMavlinkPackets) {
         warningStateRef.current.noMavlinkPackets = true;
-        addLog(
-          "warning",
-          `Serial bytes are arriving on ${connection.path}, but no telemetry frames were parsed. For TX16S telem mirror use 420000 baud (CRSF). For direct FC MAVLink USB try 115200 or 460800.`
-        );
+        addLog("warning", linkIssueLogMessage(describeNoParsedFrames(connection)));
       }
     }, 1000);
 
@@ -495,7 +509,8 @@ export function useTelemetry() {
       resetSession,
       startLogging,
       stopLogging,
-      clearLogs
+      clearLogs,
+      linkConnection
     }),
     [
       telemetry,
@@ -512,7 +527,8 @@ export function useTelemetry() {
       resetSession,
       startLogging,
       stopLogging,
-      clearLogs
+      clearLogs,
+      linkConnection
     ]
   );
 }

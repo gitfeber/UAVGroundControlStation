@@ -6,6 +6,7 @@ import type {
   TelemetrySourceMode
 } from "@uav-ground-control-station/shared";
 import { appVersionLabel } from "../lib/appVersion";
+import type { LinkIssue } from "../lib/linkErrors";
 import { Badge } from "./Panel";
 import type { ActiveView } from "../flightReview";
 
@@ -34,6 +35,7 @@ interface TopbarProps {
   onStartLogging: () => Promise<void>;
   onStopLogging: () => Promise<void>;
   onRestartTour: () => void;
+  linkIssues?: LinkIssue[];
 }
 
 export function Topbar({
@@ -57,7 +59,8 @@ export function Topbar({
   onReset,
   onStartLogging,
   onStopLogging,
-  onRestartTour
+  onRestartTour,
+  linkIssues = []
 }: TopbarProps) {
   const isCloud = runtimeMode === "cloud";
   const [selectedPath, setSelectedPath] = useState("");
@@ -274,12 +277,28 @@ export function Topbar({
         </div>
       )}
 
-      {status.lastSerialError && (
-        <div className="mt-2 max-w-full rounded-lg border border-red-400/30 bg-red-950/90 px-3 py-2 text-xs text-red-100 shadow-glow sm:absolute sm:right-4 sm:top-full sm:mt-1 sm:max-w-xl">
-          Serial: {status.lastSerialError}
+      {linkIssues.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {linkIssues.map((issue) => (
+            <LinkIssueBanner key={issue.id} issue={issue} />
+          ))}
         </div>
       )}
     </header>
+  );
+}
+
+function LinkIssueBanner({ issue }: { issue: LinkIssue }) {
+  const toneClass =
+    issue.severity === "error"
+      ? "border-red-400/30 bg-red-950/90 text-red-100"
+      : "border-amber-400/35 bg-amber-950/80 text-amber-100";
+
+  return (
+    <div className={`rounded-lg border px-3 py-2 text-xs shadow-glow ${toneClass}`}>
+      <div className="font-semibold uppercase tracking-[0.12em]">{issue.title}</div>
+      <div className="mt-1 leading-snug">{issue.message}</div>
+    </div>
   );
 }
 
