@@ -64,6 +64,7 @@ Prefer bench testing and disconnected telemetry validation before using the soft
 - **Session logging** and reset for new flights
 - **Onboarding tour** — first-run walkthrough of link controls, telemetry sidebar, map, camera, and activity log; skip anytime; restart from the **?** button in the top bar (`localStorage` keys `uav-gcs.onboarding.*`)
 - **Replay & Simulation** — frontend-only, read-only telemetry sources that drive the same dashboard without hardware: replay recorded `.jsonl`/`.json` logs (start/pause/seek/step, speed and timing modes) or run deterministic seeded simulations. See [`docs/replay-mode.md`](docs/replay-mode.md) and [`docs/adr/0003-frontend-only-replay-simulation.md`](docs/adr/0003-frontend-only-replay-simulation.md)
+- **Flight Review** — post-flight analysis over a loaded replay log (not simulation): summary stats, findings, colored path, seekable timeline with markers, and five click-to-seek graphs. Open manually from replay controls while in **Replay** mode; shares the replay clock with dashboard scrubbing. Frontend-only — nothing is uploaded. See [`docs/adr/0007-flight-review-replay-analysis-view.md`](docs/adr/0007-flight-review-replay-analysis-view.md)
 - **Shared data model** [`TelemetryState`](packages/shared/src/index.ts) for desktop and browser
 
 ## Screenshots

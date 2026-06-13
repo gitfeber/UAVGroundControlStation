@@ -13,8 +13,10 @@ import { Topbar } from "./components/Topbar";
 import { VideoPanel } from "./components/VideoPanel";
 import { ActivityLogPanel } from "./components/ActivityLogPanel";
 import { ReplaySimPanel } from "./components/ReplaySimPanel";
+import { FlightReviewView } from "./components/flightReview/FlightReviewView";
 import { SplashScreen } from "./components/SplashScreen";
 import { OnboardingTour } from "./components/OnboardingTour";
+import { useFlightReviewAnalysis, type ActiveView } from "./flightReview";
 import { getRemoteSerialControlApiBanner } from "./lib/apiSafety";
 import { webSerialUnsupportedReason } from "./link/webSerialSupport";
 
@@ -24,6 +26,7 @@ export function App() {
   const [showSplash, setShowSplash] = useState(ENABLE_SPLASH_SCREEN);
   const [dashboardReady, setDashboardReady] = useState(!ENABLE_SPLASH_SCREEN);
   const [tourRestartToken, setTourRestartToken] = useState(0);
+  const [activeView, setActiveView] = useState<ActiveView>("dashboard");
   const {
     telemetry,
     status,
@@ -47,6 +50,31 @@ export function App() {
     replay
   } = useTelemetrySource();
   const targetEstimation = useTargetEstimation(telemetry, activeSourceMode);
+  const flightReviewAnalysis = useFlightReviewAnalysis(
+    replay.loadedEvents,
+    replay.controllerState.metadata
+  );
+
+  const canOpenFlightReview =
+    activeSourceMode === "replay" &&
+    replay.loadedEvents.length > 0 &&
+    replay.controllerState.metadata !== null;
+
+  function openFlightReview() {
+    if (!canOpenFlightReview) return;
+    replay.pause();
+    setActiveView("flightReview");
+  }
+
+  function backToDashboard() {
+    setActiveView("dashboard");
+  }
+
+  useEffect(() => {
+    if (activeView === "flightReview" && !canOpenFlightReview) {
+      setActiveView("dashboard");
+    }
+  }, [activeView, canOpenFlightReview]);
 
   const [home, setHome] = useState<Coordinate | null>(null);
   const coordinate = validCoordinate(telemetry.position?.lat, telemetry.position?.lon);
@@ -116,9 +144,12 @@ export function App() {
           packetCount={telemetry.packetCount}
           packetAge={packetAge(telemetry.lastPacketAt)}
           activeSourceMode={activeSourceMode}
+          activeView={activeView}
+          replayFileName={replay.controllerState.loadedFileName}
           liveControlsLocked={liveControlsLocked}
           liveConnectedInBackground={liveConnectedInBackground}
           onSetSourceMode={setSourceMode}
+          onBackToDashboard={backToDashboard}
           onRefreshPorts={refreshPorts}
           onConnect={(path, baudRate) => connect({ path, baudRate })}
           onDisconnect={disconnect}
@@ -132,43 +163,54 @@ export function App() {
 
         {remoteSerialControlApiBanner && <RemoteSerialControlApiBanner message={remoteSerialControlApiBanner} />}
 
-        {activeSourceMode !== "live" && <NonLiveBanner mode={activeSourceMode} />}
+        {activeView === "flightReview" && flightReviewAnalysis ? (
+          <FlightReviewView analysis={flightReviewAnalysis} replay={replay} />
+        ) : (
+          <>
+            {activeSourceMode !== "live" && <NonLiveBanner mode={activeSourceMode} />}
 
-        <div className={`relative flex min-h-0 flex-1 ${dashboardTint(activeSourceMode)}`}>
-          <TelemetrySidebar
-            telemetry={telemetry}
-            distanceFromHome={distanceFromHome}
-            alerts={alerts}
-            preflight={preflight}
-            targetEstimation={targetEstimation}
-            telemetryStale={telemetryStale}
-          />
-          <ErrorBoundary>
-            <MapPanel
-              telemetry={telemetry}
-              coordinate={coordinate}
-              home={home}
-              groundTarget={targetEstimation.estimate}
-              telemetryStale={telemetryStale}
-              trackMode={isControlledTrack ? "controlled" : "internal"}
-              controlledTrack={replay.replayTrack}
-            />
-          </ErrorBoundary>
-          <ActivityLogPanel logs={logs} messages={status.mavlinkMessages ?? []} onClear={clearLogs} />
-          <VideoPanel estimate={targetEstimation.estimate} />
+            <div className={`relative flex min-h-0 flex-1 ${dashboardTint(activeSourceMode)}`}>
+              <TelemetrySidebar
+                telemetry={telemetry}
+                distanceFromHome={distanceFromHome}
+                alerts={alerts}
+                preflight={preflight}
+                targetEstimation={targetEstimation}
+                telemetryStale={telemetryStale}
+              />
+              <ErrorBoundary>
+                <MapPanel
+                  telemetry={telemetry}
+                  coordinate={coordinate}
+                  home={home}
+                  groundTarget={targetEstimation.estimate}
+                  telemetryStale={telemetryStale}
+                  trackMode={isControlledTrack ? "controlled" : "internal"}
+                  controlledTrack={replay.replayTrack}
+                />
+              </ErrorBoundary>
+              <ActivityLogPanel logs={logs} messages={status.mavlinkMessages ?? []} onClear={clearLogs} />
+              <VideoPanel estimate={targetEstimation.estimate} />
 
-          {activeSourceMode !== "live" && (
-            <div className="absolute right-4 top-4 z-20">
-              <ReplaySimPanel mode={activeSourceMode} replay={replay} />
+              {activeSourceMode !== "live" && (
+                <div className="absolute right-4 top-4 z-20">
+                  <ReplaySimPanel
+                    mode={activeSourceMode}
+                    replay={replay}
+                    canOpenFlightReview={canOpenFlightReview}
+                    onOpenFlightReview={openFlightReview}
+                  />
+                </div>
+              )}
+
+              {error && (
+                <div className="absolute left-1/2 top-4 z-30 -translate-x-1/2 rounded-lg border border-red-400/30 bg-red-950/90 px-4 py-2 text-sm text-red-100 shadow-glow">
+                  {error}
+                </div>
+              )}
             </div>
-          )}
-
-          {error && (
-            <div className="absolute left-1/2 top-4 z-30 -translate-x-1/2 rounded-lg border border-red-400/30 bg-red-950/90 px-4 py-2 text-sm text-red-100 shadow-glow">
-              {error}
-            </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
       {showSplash && (
         <SplashScreen

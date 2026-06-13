@@ -166,6 +166,30 @@ _Avoid_: Replay path
 A named deterministic generator (`Nominal flight`, `Weak radio link`, `GPS degradation`, `Low battery approach`) that, given a seed, produces a bounded **replay event** list. No file, serial, network, or hardware access.
 _Avoid_: Demo data, test mode
 
+**Active view**:
+Which dashboard layout is shown — `dashboard` (live GCS) or `flightReview` (post-flight analysis). Distinct from **source mode**; only switches presentation. `flightReview` replaces the main dashboard content (sidebar, camera, replay panel hidden) and requires a loaded **replay log** while **source mode** is `replay`.
+_Avoid_: Debrief mode (implies a telemetry source), view mode (too generic)
+
+**Flight review**:
+The post-flight analysis layout over a loaded **replay log** — summary, findings, colored path, graphs, and a seekable timeline. Entered manually via **Open Flight Review** while **source mode** is `replay`; not a **source mode**, never auto-opens on file load, and unavailable for **simulation** in MVP. Shares the replay engine clock with the dashboard replay controls.
+_Avoid_: Debrief mode, flight log (use only for the human-facing recorded-file label)
+
+**Flight review finding**:
+One detected post-flight condition with a replay timestamp and plain-language message — e.g. telemetry stale interval, GPS fix change, battery threshold crossed. Carries `severity` (`info` or `warn`), a fixed `category` (`telemetry`, `gps`, `battery`, `radio`, `flight`, or `summary`), and `showOnTimeline` for marker placement. MVP derives findings from `telemetry` **replay events** only; v1.1 may also consume logged `activity`, `diagnostic`, and `marker` **replay events**. Missing event classes are shown as not recorded — never guessed from telemetry.
+_Avoid_: Alert, warning (ambiguous with live advisory UI), event (use **replay event** for log entries)
+
+**Session home (first fix)**:
+The first valid GPS coordinate in a **replay log**, used as the distance anchor for **flight review** analysis. Distinct from the dashboard **home reference** and from the flight controller's stored home.
+_Avoid_: Home reference, launch point, FC home
+
+**Flight review thresholds**:
+Hardcoded analysis limits for deriving **flight review findings** from a replay log — telemetry gap length, GPS satellites/fix/EPH, battery percent/voltage/sag delta, link quality, optional altitude/distance caps. Separate from live **preflight** thresholds in MVP; reuse overlapping defaults where sensible. May unify later.
+_Avoid_: Debrief settings, alert thresholds
+
+**Path coloring mode**:
+How **flight review** colors the flown path segment by segment — log gap, altitude, speed, battery voltage, or GPS quality. Operator-selectable; default highlights log-gap periods.
+_Avoid_: Heatmap layer, track style
+
 ## Flagged ambiguities
 
 | Ambiguous | Canonical | Notes |

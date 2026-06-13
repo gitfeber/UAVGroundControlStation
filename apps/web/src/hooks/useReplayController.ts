@@ -123,6 +123,8 @@ export interface ReplayController {
   replayTelemetry: TelemetryState;
   replayTrack: TrackPoint[];
   replaySimLogs: ActivityLogEntry[];
+  /** Parsed events from the currently loaded replay/simulation log. */
+  loadedEvents: NormalizedReplayEvent[];
   controllerState: ReplayControllerState;
   loadParsedLog: (result: ParseReplayLogResult) => void;
   loadSimulation: (options: SimulationOptions) => void;
@@ -143,6 +145,7 @@ export function useReplayController(): ReplayController {
   const [replayTelemetry, setReplayTelemetry] = useState<TelemetryState>(createEmptyReplayState);
   const [replayTrack, setReplayTrack] = useState<TrackPoint[]>([]);
   const [replaySimLogs, setReplaySimLogs] = useState<ActivityLogEntry[]>([]);
+  const [loadedEvents, setLoadedEvents] = useState<NormalizedReplayEvent[]>([]);
   const [controllerState, setControllerState] = useState<ReplayControllerState>(initialControllerState);
 
   const engineRef = useRef<Engine>(createEngine());
@@ -324,6 +327,7 @@ export function useReplayController(): ReplayController {
       sourceModeRef.current = sourceMode;
       const engine = engineRef.current;
       engine.events = events;
+      setLoadedEvents(events);
       engine.parseWarnings = metadata.parseWarningCount;
       engine.skipped = metadata.skippedEventCount;
       resetToStart();
@@ -524,6 +528,7 @@ export function useReplayController(): ReplayController {
       replayTelemetry,
       replayTrack,
       replaySimLogs,
+      loadedEvents,
       controllerState,
       loadParsedLog,
       loadSimulation,
@@ -543,6 +548,7 @@ export function useReplayController(): ReplayController {
       replayTelemetry,
       replayTrack,
       replaySimLogs,
+      loadedEvents,
       controllerState,
       loadParsedLog,
       loadSimulation,

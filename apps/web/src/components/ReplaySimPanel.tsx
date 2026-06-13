@@ -28,6 +28,8 @@ const FIXED_RATES: ReplayFixedRateHz[] = [5, 10, 20, 50];
 interface ReplaySimPanelProps {
   mode: "replay" | "simulation";
   replay: ReplayController;
+  canOpenFlightReview?: boolean;
+  onOpenFlightReview?: () => void;
 }
 
 function formatClock(ms: number): string {
@@ -44,7 +46,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function ReplaySimPanel({ mode, replay }: ReplaySimPanelProps) {
+export function ReplaySimPanel({ mode, replay, canOpenFlightReview = false, onOpenFlightReview }: ReplaySimPanelProps) {
   const { controllerState } = replay;
   const [open, setOpen] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -172,6 +174,23 @@ export function ReplaySimPanel({ mode, replay }: ReplaySimPanelProps) {
           )}
 
           {controllerState.metadata && <MetadataSummary metadata={controllerState.metadata} />}
+
+          {isReplay && (
+            <div className="space-y-1">
+              <button
+                type="button"
+                className="btn-primary w-full"
+                disabled={!canOpenFlightReview}
+                title={canOpenFlightReview ? undefined : "Flight Review requires a recorded session."}
+                onClick={onOpenFlightReview}
+              >
+                Open Flight Review
+              </button>
+              {!canOpenFlightReview && (
+                <p className="text-[11px] text-slate-500">Flight Review requires a recorded session.</p>
+              )}
+            </div>
+          )}
 
           {/* Transport controls */}
           <div className="flex flex-wrap gap-2">
