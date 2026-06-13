@@ -21,13 +21,6 @@ function serialConnectDescription(runtimeMode: RuntimeMode): string {
   return "Choose a serial port (or manual path), set baud rate, then Connect. The browser UI talks to the local Node backend over WebSocket. Use Refresh if your USB device was plugged in after launch.";
 }
 
-function groundTargetDescription(runtimeMode: RuntimeMode): string {
-  if (runtimeMode === "desktop") {
-    return "Estimates a ground target from the camera crosshair using ray marching against a GeoTIFF DEM. Load terrain here for accurate slant range and map markers. Live mode only.";
-  }
-
-  return "Shows image-center target estimation from the camera crosshair. Browser runtimes use flat terrain; load a GeoTIFF DEM in the desktop app for accurate ray marching. Live mode only.";
-}
 
 export function buildOnboardingSteps(runtimeMode: RuntimeMode): DriveStep[] {
   const defs: StepDef[] = [
@@ -173,7 +166,7 @@ export function buildOnboardingSteps(runtimeMode: RuntimeMode): DriveStep[] {
       popover: {
         title: "Camera feed",
         description:
-          "Draggable picture-in-picture video panel with crosshair overlay for ground-target estimation. Set stream URL and type (MJPEG, HLS, WebRTC) here; drag the header to reposition.",
+          "Draggable picture-in-picture video panel with crosshair overlay. When the stream is live, the Ground Target card appears beside the feed with coordinates, slant range, terrain/DEM settings, and sample-log export. Set stream URL and type (MJPEG, HLS, WebRTC) here; drag the header to reposition.",
         side: "left",
         align: "end"
       }
@@ -186,15 +179,6 @@ export function buildOnboardingSteps(runtimeMode: RuntimeMode): DriveStep[] {
           "Connection events, parser stats, and per-frame MAVLink message counts. Open to inspect warnings; Clear wipes the session log without affecting the serial link.",
         side: "right",
         align: "end"
-      }
-    },
-    {
-      element: tourTarget("ground-target"),
-      popover: {
-        title: "Ground target",
-        description: groundTargetDescription(runtimeMode),
-        side: "right",
-        align: "center"
       }
     },
     {

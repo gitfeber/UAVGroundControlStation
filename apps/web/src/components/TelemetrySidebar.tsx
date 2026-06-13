@@ -5,8 +5,6 @@ import { clampBatteryPercent, elapsedTime, formatInteger, formatNumber, percenta
 import { sensorHealthSummary } from "../lib/sensorHealth";
 import { defaultSidebarOrder, loadSidebarOrder, saveSidebarOrder, type SidebarCardId } from "../lib/sidebarCardOrder";
 import type { PreflightHealth } from "../lib/preflight";
-import type { TargetEstimationController } from "../hooks/useTargetEstimation";
-import { GroundTargetPanel } from "./GroundTargetPanel";
 import { Badge, Metric, Panel } from "./Panel";
 import { PreflightHealthCard } from "./PreflightHealthCard";
 import type { SidebarDragHandlers } from "./SidebarSortableList";
@@ -22,7 +20,6 @@ interface TelemetrySidebarProps {
   distanceFromHome: number | null;
   alerts: AlertItem[];
   preflight: PreflightHealth;
-  targetEstimation: TargetEstimationController;
   telemetryStale?: boolean;
 }
 
@@ -31,7 +28,6 @@ export function TelemetrySidebar({
   distanceFromHome,
   alerts,
   preflight,
-  targetEstimation,
   telemetryStale = false
 }: TelemetrySidebarProps) {
   const [view, setView] = useState<SidebarView>(() => readSidebarView());
@@ -107,7 +103,7 @@ export function TelemetrySidebar({
           mode="text"
           order={cardOrder}
           onOrderChange={setCardOrder}
-          renderCard={(id, drag) => renderTextCard(id, { telemetry, distanceFromHome, batteryPercent, sensorSummary, targetEstimation }, drag)}
+          renderCard={(id, drag) => renderTextCard(id, { telemetry, distanceFromHome, batteryPercent, sensorSummary }, drag)}
         />
       )}
     </aside>
@@ -119,23 +115,13 @@ interface TextRenderContext {
   distanceFromHome: number | null;
   batteryPercent: number | null;
   sensorSummary: string;
-  targetEstimation: TargetEstimationController;
 }
 
 function renderTextCard(id: SidebarCardId, ctx: TextRenderContext, drag: SidebarDragHandlers) {
-  const { telemetry, distanceFromHome, batteryPercent, sensorSummary, targetEstimation } = ctx;
+  const { telemetry, distanceFromHome, batteryPercent, sensorSummary } = ctx;
   const sortable = { sortable: true as const, onDragStart: drag.onDragStart, onDragEnd: drag.onDragEnd };
 
   switch (id) {
-    case "groundTarget":
-      return (
-        <GroundTargetPanel
-          {...targetEstimation}
-          sortable
-          onDragStart={drag.onDragStart}
-          onDragEnd={drag.onDragEnd}
-        />
-      );
     case "vehicle":
       return (
         <Panel title="Vehicle" {...sortable}>

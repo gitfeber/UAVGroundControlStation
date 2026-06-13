@@ -7,13 +7,11 @@ export type SidebarCardId =
   | "battery"
   | "radio"
   | "system"
-  | "session"
-  | "groundTarget";
+  | "session";
 
 /** Recommended flight-priority order (armed/mode → motion → attitude/heading → nav → power/link → FC → session). */
 export const DEFAULT_SIDEBAR_ORDER: SidebarCardId[] = [
   "vehicle",
-  "groundTarget",
   "motion",
   "attitude",
   "compass",
@@ -29,7 +27,6 @@ const LEGACY_KEYS = ["uav-gcs.sidebar.order.text", "uav-gcs.sidebar.order.instru
 
 const TEXT_VISIBLE = new Set<SidebarCardId>([
   "vehicle",
-  "groundTarget",
   "attitude",
   "gps",
   "battery",
@@ -85,13 +82,15 @@ export function defaultSidebarOrder(): SidebarCardId[] {
   return [...DEFAULT_SIDEBAR_ORDER];
 }
 
+const DEPRECATED_CARD_IDS = new Set(["groundTarget"]);
+
 function normalizeOrder(stored: unknown[], defaults: SidebarCardId[]): SidebarCardId[] {
   const allowed = new Set(defaults);
   const seen = new Set<SidebarCardId>();
   const result: SidebarCardId[] = [];
 
   for (const entry of stored) {
-    if (typeof entry !== "string" || !allowed.has(entry as SidebarCardId)) continue;
+    if (typeof entry !== "string" || DEPRECATED_CARD_IDS.has(entry) || !allowed.has(entry as SidebarCardId)) continue;
     const id = entry as SidebarCardId;
     if (seen.has(id)) continue;
     seen.add(id);

@@ -175,7 +175,6 @@ export function App() {
                 distanceFromHome={distanceFromHome}
                 alerts={alerts}
                 preflight={preflight}
-                targetEstimation={targetEstimation}
                 telemetryStale={telemetryStale}
               />
               <ErrorBoundary>
@@ -190,7 +189,7 @@ export function App() {
                 />
               </ErrorBoundary>
               <ActivityLogPanel logs={logs} messages={status.mavlinkMessages ?? []} onClear={clearLogs} />
-              <VideoPanel estimate={targetEstimation.estimate} />
+              <VideoPanel targetEstimation={targetEstimation} />
 
               {activeSourceMode !== "live" && (
                 <div className="absolute right-4 top-4 z-20">
