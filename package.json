@@ -16,7 +16,7 @@
     "build:cloud": "pnpm --filter @uav-ground-control-station/web build:cloud",
     "build:desktop": "pnpm --filter @uav-ground-control-station/shared build && pnpm --filter @uav-ground-control-station/desktop build",
     "lint": "pnpm -r lint",
-    "test": "pnpm --filter @uav-ground-control-station/shared build && pnpm --filter @uav-ground-control-station/target-estimation test && pnpm --filter @uav-ground-control-station/server test && pnpm --filter @uav-ground-control-station/web test",
+    "test": "pnpm --filter @uav-ground-control-station/shared build && pnpm --filter @uav-ground-control-station/shared test && pnpm --filter @uav-ground-control-station/target-estimation test && pnpm --filter @uav-ground-control-station/server test && pnpm --filter @uav-ground-control-station/web test",
     "typecheck": "pnpm --filter @uav-ground-control-station/shared build && pnpm --filter @uav-ground-control-station/shared typecheck && pnpm --filter @uav-ground-control-station/target-estimation build && pnpm --filter @uav-ground-control-station/target-estimation typecheck && pnpm --filter @uav-ground-control-station/server typecheck && pnpm --filter @uav-ground-control-station/web typecheck",
     "audit:desktop": "cd apps/desktop/src-tauri && cargo audit",
     "audit:js": "pnpm audit --prod"
