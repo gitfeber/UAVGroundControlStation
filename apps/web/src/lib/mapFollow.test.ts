@@ -1,11 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  MAP_FOLLOW_KEY,
-  MAP_HEADING_UP_KEY,
-  boundsForTrack,
-  loadMapFollowPreferences,
-  saveMapFollowPreferences
-} from "./mapFollow";
+import { boundsForTrack, loadMapFollowPreferences, saveMapFollowPreferences } from "./mapFollow";
 
 function mockLocalStorage() {
   const storage = new Map<string, string>();
