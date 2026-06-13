@@ -166,7 +166,7 @@ export function buildOnboardingSteps(runtimeMode: RuntimeMode): DriveStep[] {
       popover: {
         title: "Camera feed",
         description:
-          "Draggable picture-in-picture video panel with crosshair overlay. When the stream is live, the Ground Target card appears beside the feed with coordinates, slant range, terrain/DEM settings, and sample-log export. Set stream URL and type (MJPEG, HLS, WebRTC) here; drag the header to reposition.",
+          "Draggable picture-in-picture video panel with crosshair overlay. Toggle **HUD** in the header for a compact attitude overlay (pitch, heading, speed, altitude) while watching the feed. When the stream is live, the Ground Target card appears beside the feed. Set stream URL and type (MJPEG, HLS, WebRTC) here; drag the header to reposition.",
         side: "left",
         align: "end"
       }

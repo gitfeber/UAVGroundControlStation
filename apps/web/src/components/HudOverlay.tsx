@@ -1,3 +1,4 @@
+import { useId } from "react";
 import type { TelemetryState } from "@uav-ground-control-station/shared";
 import { formatNumber } from "../lib/format";
 import { resolveHeadingDeg } from "../lib/resolveHeadingDeg";
@@ -13,9 +14,12 @@ interface HudOverlayProps {
   stale?: boolean;
   /** Phase 2: smaller variant for video PiP. */
   compact?: boolean;
+  /** When false, omit `data-tour="attitude-hud"` (e.g. compact PiP duplicate). */
+  showTourTarget?: boolean;
 }
 
-export function HudOverlay({ telemetry, stale = false, compact = false }: HudOverlayProps) {
+export function HudOverlay({ telemetry, stale = false, compact = false, showTourTarget = true }: HudOverlayProps) {
+  const clipId = useId().replace(/:/g, "");
   const size = compact ? 220 : 320;
   const cx = size / 2;
   const cy = size / 2;
@@ -39,7 +43,7 @@ export function HudOverlay({ telemetry, stale = false, compact = false }: HudOve
 
   return (
     <div
-      data-tour="attitude-hud"
+      {...(showTourTarget ? { "data-tour": "attitude-hud" } : {})}
       className={`relative pointer-events-none select-none font-mono text-slate-100 ${
         stale ? "opacity-60 saturate-50" : ""
       }`}
@@ -55,7 +59,7 @@ export function HudOverlay({ telemetry, stale = false, compact = false }: HudOve
       )}
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="overflow-visible">
         <defs>
-          <clipPath id="hud-attitude-clip">
+          <clipPath id={clipId}>
             <circle cx={cx} cy={cy} r={radius} />
           </clipPath>
         </defs>
@@ -69,7 +73,7 @@ export function HudOverlay({ telemetry, stale = false, compact = false }: HudOve
           strokeWidth={1.5}
         />
 
-        <g clipPath="url(#hud-attitude-clip)">
+        <g clipPath={`url(#${clipId})`}>
           {hasAttitude ? (
             <g transform={`rotate(${-rollDeg}, ${cx}, ${cy})`}>
               <rect
