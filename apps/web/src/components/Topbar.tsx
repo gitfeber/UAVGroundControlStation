@@ -34,6 +34,9 @@ interface TopbarProps {
   onReset: () => Promise<void>;
   onStartLogging: () => Promise<void>;
   onStopLogging: () => Promise<void>;
+  onDownloadSession?: () => void;
+  sessionEventCount?: number;
+  sessionExportEnabled?: boolean;
   onRestartTour: () => void;
   linkIssues?: LinkIssue[];
 }
@@ -59,6 +62,9 @@ export function Topbar({
   onReset,
   onStartLogging,
   onStopLogging,
+  onDownloadSession,
+  sessionEventCount = 0,
+  sessionExportEnabled = false,
   onRestartTour,
   linkIssues = []
 }: TopbarProps) {
@@ -226,6 +232,21 @@ export function Topbar({
             <button className="btn-secondary whitespace-nowrap" disabled={busy || liveControlsLocked} onClick={() => run(onReset)}>
               Reset
             </button>
+
+            {sessionExportEnabled && (
+              <button
+                className="btn-secondary whitespace-nowrap border-cyan-300/30 text-cyan-100"
+                disabled={busy || sessionEventCount === 0}
+                title={
+                  sessionEventCount === 0
+                    ? "Connect and receive telemetry to build a downloadable session."
+                    : "Download replay JSONL to your device. Nothing is uploaded."
+                }
+                onClick={() => onDownloadSession?.()}
+              >
+                Download session
+              </button>
+            )}
 
             {!isCloud &&
               (loggingStatus.active ? (
