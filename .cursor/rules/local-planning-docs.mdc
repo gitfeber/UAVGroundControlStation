@@ -1,0 +1,13 @@
+---
+description: Never commit local-only planning docs (improvement roadmap, handoff)
+alwaysApply: true
+---
+
+# Local planning docs — do not commit
+
+These files are **local-only** and listed in `.gitignore`. Never `git add`, commit, or include them in PRs:
+
+- `docs/improvement-roadmap.md` — private improvement roadmap / release tracking
+- `handoff.md` — session handoff notes
+
+When finishing roadmap tasks, update the local file if the user asks, but do **not** commit it. Bump app version in the synced files instead (`package.json`, `apps/desktop/package.json`, `tauri.conf.json`, `Cargo.toml`).

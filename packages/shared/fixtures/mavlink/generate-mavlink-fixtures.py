@@ -9,9 +9,9 @@ CRC_EXTRA or length tables therefore makes the framer reject these real frames
 
 Usage (regenerate after changing the consumed message set):
     pip install --user pymavlink
-    python3 generate-mavlink-fixtures.py > mavlink-fixtures.json
+    python3 generate-mavlink-fixtures.py > frames.json
 
-Output is committed as mavlink-fixtures.json so the test suite needs no Python.
+Output is committed as frames.json so the test suite needs no Python.
 """
 
 import io
@@ -101,7 +101,7 @@ def pack(dialect, name):
 
 
 def main():
-    out = {"note": "Real MAVLink frames from pymavlink common dialect. Regenerate with generate-mavlink-fixtures.py.",
+    out = {"note": "Real MAVLink frames from pymavlink common dialect. Regenerate with packages/shared/fixtures/mavlink/generate-mavlink-fixtures.py.",
            "pymavlink_dialect": "common", "messages": {}, "tables": {"crc_extra": {}, "max_payload_len": {}}}
 
     for name, msgid in CONSUMED.items():

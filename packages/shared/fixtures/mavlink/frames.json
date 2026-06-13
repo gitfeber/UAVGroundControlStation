@@ -1,5 +1,5 @@
 {
-  "note": "Real MAVLink frames from pymavlink common dialect. Regenerate with generate-mavlink-fixtures.py.",
+  "note": "Real MAVLink frames from pymavlink common dialect. Regenerate with packages/shared/fixtures/mavlink/generate-mavlink-fixtures.py.",
   "pymavlink_dialect": "common",
   "messages": {
     "heartbeat": {

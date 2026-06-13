@@ -10,3 +10,4 @@ logs/*.jsonl
 .env.*
 !.env.example
 handoff.md
+docs/improvement-roadmap.md

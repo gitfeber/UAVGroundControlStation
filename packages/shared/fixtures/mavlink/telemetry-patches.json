@@ -1,0 +1,96 @@
+{
+  "note": "Expected TelemetryState fields after applyMavlinkFrame for each golden frame (wire_v2). Numbers are post-decode values from TelemetryStore.",
+  "messages": {
+    "heartbeat": {
+      "packetCount": 1,
+      "vehicle": {
+        "systemId": 1,
+        "componentId": 1,
+        "type": "Quadrotor",
+        "armed": true,
+        "flightMode": "LOITER"
+      }
+    },
+    "gps_raw_int": {
+      "packetCount": 1,
+      "vehicle": { "systemId": 1 },
+      "position": {
+        "lat": 47.3977418,
+        "lon": 8.5451704,
+        "altMsl": 500,
+        "groundCourseDeg": 270
+      },
+      "gps": {
+        "fixType": 3,
+        "fixLabel": "3D Fix",
+        "satellites": 11
+      },
+      "motion": {
+        "groundSpeed": 12.34
+      }
+    },
+    "attitude": {
+      "packetCount": 1,
+      "vehicle": { "systemId": 1 },
+      "motion": {
+        "rollDeg": 5.729577951308232,
+        "pitchDeg": -2.864788976308231,
+        "yawDeg": 89.95437384039244
+      }
+    },
+    "global_position_int": {
+      "packetCount": 1,
+      "vehicle": { "systemId": 1 },
+      "position": {
+        "lat": 47.3977418,
+        "lon": 8.5451704,
+        "altMsl": 500,
+        "relativeAlt": 120,
+        "headingDeg": 270
+      }
+    },
+    "vfr_hud": {
+      "packetCount": 1,
+      "vehicle": { "systemId": 1 },
+      "motion": {
+        "airSpeed": 12.5,
+        "groundSpeed": 11,
+        "climbRate": 1.5
+      },
+      "position": {
+        "altMsl": 503.2,
+        "headingDeg": 270
+      }
+    },
+    "statustext": {
+      "packetCount": 1,
+      "vehicle": { "systemId": 1 },
+      "system": {
+        "statusText": ["WARNING: PreArm: check"]
+      },
+      "stats": {
+        "warningCount": 1
+      }
+    },
+    "sys_status": {
+      "packetCount": 1,
+      "vehicle": { "systemId": 1 }
+    },
+    "nav_controller_output": {
+      "packetCount": 1,
+      "vehicle": { "systemId": 1 }
+    },
+    "rc_channels": {
+      "packetCount": 1,
+      "vehicle": { "systemId": 1 }
+    },
+    "radio_status": {
+      "packetCount": 1,
+      "vehicle": { "systemId": 1 }
+    },
+    "battery_status": {
+      "packetCount": 1,
+      "vehicle": { "systemId": 1 }
+    }
+  }
+}
