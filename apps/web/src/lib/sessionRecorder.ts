@@ -10,6 +10,8 @@ export const SESSION_BUFFER_SOFT_WARN_BYTES = 25 * 1024 * 1024;
 
 export const SESSION_RECORDER_MAX_HZ = 20;
 
+type SessionActivityLevel = NonNullable<ReplayActivityEvent["level"]>;
+
 export interface SessionRecorderSnapshot {
   eventCount: number;
   approximateBytes: number;
@@ -47,7 +49,7 @@ function timestampForFile(date = new Date()): string {
 function activityLine(
   sessionStartMs: number,
   ts: number,
-  level: ReplayActivityEvent["level"],
+  level: SessionActivityLevel,
   message: string
 ): string {
   const entry: ReplayActivityEvent = {
@@ -106,7 +108,7 @@ export class SessionRecorder {
     this.softWarnExceeded = false;
   }
 
-  recordActivity(level: ReplayActivityEvent["level"], message: string, ts = Date.now()): void {
+  recordActivity(level: SessionActivityLevel, message: string, ts = Date.now()): void {
     this.ensureSessionStart(ts);
     this.append(activityLine(this.sessionStartMs as number, ts, level, message));
   }
