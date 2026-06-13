@@ -54,7 +54,7 @@ Prefer bench testing and disconnected telemetry validation before using the soft
 
 ## Features
 
-- **Live map** with flight track (up to 5000 points), home reference, distance, bottom-center **Attitude HUD** (pitch ladder, roll arc, heading tape, speed/altitude, climb bar, armed/mode; dims with a **Stale** banner when live telemetry is older than 3 s), and in-app **basemap switcher** (Tactical / Satellite / Topo; persisted in `localStorage` as `uav-gcs.map.basemap`)
+- **Live map** with flight track (up to 5000 points), home reference, distance, bottom-center **Attitude HUD** (pitch ladder, roll arc, heading tape, speed/altitude, climb bar, armed/mode; dims with a **Stale** banner when live telemetry is older than 3 s), **map navigation toolbar** (Follow with heading-up/north-up, Recenter, Fit track; preferences in `uav-gcs.map.follow` / `uav-gcs.map.headingUp`), and in-app **basemap switcher** (Tactical / Satellite / Topo; persisted in `localStorage` as `uav-gcs.map.basemap`)
 - **Telemetry sidebar** — **Text** or **Inst** (mini gauges with the same telemetry fields as text mode); drag card headers (⠿) to reorder (shared order for both views, stored in `uav-gcs.sidebar.order`); **Reset** restores recommended flight-priority order; alerts stay fixed at the top
 - **Serial link** — port picker (USB/PNP preferred), manual path entry, common baud rates
 - **Activity log** — connection status, parser stats, frame message stats; actionable link-issue banners for serial denial, busy ports, silence after connect, and parser spikes
@@ -193,6 +193,19 @@ pnpm --filter @uav-ground-control-station/web preview
 ```
 
 ## Operator notes
+
+### Map navigation
+
+Use the toolbar at the **bottom-left** of the map:
+
+| Control | Behavior |
+|---------|----------|
+| **Follow** | Keeps the aircraft centered as telemetry updates (live, replay, and simulation). |
+| **Hdg up / N up** | When Follow is on, rotate the map with aircraft heading or keep north up. |
+| **Recenter** | One-shot center on the aircraft at the current zoom and resume Follow. |
+| **Fit track** | Zoom to the full session track (up to 5000 points). Disabled when the track is empty. |
+
+Manual pan or zoom **pauses** Follow until you tap **Recenter** or turn Follow back on. Preferences persist in `localStorage` (`uav-gcs.map.follow`, `uav-gcs.map.headingUp`). On a fresh install, the map still auto-centers once on the first GPS fix.
 
 ### Onboarding tour
 
