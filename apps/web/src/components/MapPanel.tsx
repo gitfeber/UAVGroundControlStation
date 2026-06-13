@@ -10,10 +10,12 @@ import {
   saveMapBasemapId,
   type MapBasemapId
 } from "../lib/mapBasemaps";
+import { boundsForTrack, loadMapFollowPreferences, saveMapFollowPreferences } from "../lib/mapFollow";
 import { resolveHeadingDeg } from "../lib/resolveHeadingDeg";
 import type { TrackPoint } from "../replay/reconstruct";
 import { HudOverlay } from "./HudOverlay";
 import { MapBasemapSwitcher } from "./MapBasemapSwitcher";
+import { MapToolbar } from "./MapToolbar";
 
 interface MapPanelProps {
   telemetry: TelemetryState;
@@ -39,18 +41,21 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, telemetryS
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapInstance | null>(null);
   const centeredRef = useRef(false);
+  const programmaticMoveRef = useRef(false);
+  const initialPrefs = useMemo(() => loadMapFollowPreferences(), []);
   const [mapReady, setMapReady] = useState(false);
   const [styleEpoch, setStyleEpoch] = useState(0);
   const [track, setTrack] = useState<[number, number][]>([]);
   const [basemapId, setBasemapId] = useState<MapBasemapId>(() => loadMapBasemapId());
+  const [followEnabled, setFollowEnabled] = useState(initialPrefs.follow);
+  const [headingUp, setHeadingUp] = useState(initialPrefs.headingUp);
+  const [followPaused, setFollowPaused] = useState(false);
   const basemapSwitcherEnabled = isMapBasemapSwitcherEnabled();
 
   const isControlled = trackMode === "controlled";
   const droneLngLat = useMemo(() => toMapLngLat(coordinate), [coordinate]);
   const homeLngLat = useMemo(() => toMapLngLat(home), [home]);
 
-  // In controlled mode the replay/sim controller owns the track; render exactly
-  // what it provides. In internal mode the live append-on-change track is used.
   const displayTrack = useMemo<[number, number][]>(() => {
     if (!isControlled) return track;
     return (controlledTrack ?? [])
@@ -58,7 +63,23 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, telemetryS
       .filter((point) => isValidLngLat(point[0], point[1]));
   }, [isControlled, controlledTrack, track]);
 
-  const heading = resolveHeadingDeg(telemetry) ?? 0;
+  const heading = resolveHeadingDeg(telemetry);
+
+  const runProgrammaticMove = useCallback((action: (map: MapInstance) => void) => {
+    const map = mapRef.current;
+    if (!map) return;
+    programmaticMoveRef.current = true;
+    const release = () => {
+      programmaticMoveRef.current = false;
+    };
+    map.once("moveend", release);
+    action(map);
+  }, []);
+
+  const pauseFollowFromInteraction = useCallback(() => {
+    if (programmaticMoveRef.current) return;
+    setFollowPaused(true);
+  }, []);
 
   const handleBasemapChange = useCallback((nextBasemapId: MapBasemapId) => {
     setBasemapId(nextBasemapId);
@@ -73,6 +94,48 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, telemetryS
       setStyleEpoch((epoch) => epoch + 1);
     });
   }, [mapReady]);
+
+  const handleFollowChange = useCallback((enabled: boolean) => {
+    setFollowEnabled(enabled);
+    setFollowPaused(false);
+    saveMapFollowPreferences(enabled, headingUp);
+    if (enabled && droneLngLat) {
+      runProgrammaticMove((map) => {
+        map.easeTo({
+          center: droneLngLat,
+          bearing: headingUp && heading !== null ? heading : 0,
+          duration: 300
+        });
+      });
+    }
+  }, [droneLngLat, heading, headingUp, runProgrammaticMove]);
+
+  const handleHeadingUpChange = useCallback((enabled: boolean) => {
+    setHeadingUp(enabled);
+    saveMapFollowPreferences(followEnabled, enabled);
+  }, [followEnabled]);
+
+  const handleRecenter = useCallback(() => {
+    if (!droneLngLat) return;
+    setFollowEnabled(true);
+    setFollowPaused(false);
+    saveMapFollowPreferences(true, headingUp);
+    runProgrammaticMove((map) => {
+      map.jumpTo({
+        center: droneLngLat,
+        zoom: map.getZoom(),
+        bearing: headingUp && heading !== null ? heading : 0
+      });
+    });
+  }, [droneLngLat, heading, headingUp, runProgrammaticMove]);
+
+  const handleFitTrack = useCallback(() => {
+    const bounds = boundsForTrack(sanitizeTrack(displayTrack));
+    if (!bounds) return;
+    runProgrammaticMove((map) => {
+      map.fitBounds(bounds, { padding: 48, maxZoom: 16, duration: 400 });
+    });
+  }, [displayTrack, runProgrammaticMove]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -114,6 +177,19 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, telemetryS
   }, []);
 
   useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+
+    map.on("dragstart", pauseFollowFromInteraction);
+    map.on("zoomstart", pauseFollowFromInteraction);
+
+    return () => {
+      map.off("dragstart", pauseFollowFromInteraction);
+      map.off("zoomstart", pauseFollowFromInteraction);
+    };
+  }, [mapReady, pauseFollowFromInteraction]);
+
+  useEffect(() => {
     if (isControlled || !droneLngLat) return;
 
     setTrack((current) => {
@@ -141,11 +217,26 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, telemetryS
     const source = map.getSource("drone") as import("maplibre-gl").GeoJSONSource | undefined;
     source?.setData(pointCollection(droneLngLat));
 
-    if (!centeredRef.current) {
+    if (!centeredRef.current && initialPrefs.neverConfigured) {
       centeredRef.current = true;
-      map.jumpTo({ center: droneLngLat, zoom: 15 });
+      runProgrammaticMove((activeMap) => {
+        activeMap.jumpTo({ center: droneLngLat, zoom: 15 });
+      });
     }
-  }, [droneLngLat, heading, mapReady, styleEpoch]);
+  }, [droneLngLat, mapReady, styleEpoch, initialPrefs.neverConfigured, runProgrammaticMove]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !droneLngLat || !followEnabled || followPaused) return;
+
+    runProgrammaticMove((activeMap) => {
+      activeMap.easeTo({
+        center: droneLngLat,
+        bearing: headingUp && heading !== null ? heading : 0,
+        duration: 300
+      });
+    });
+  }, [droneLngLat, heading, followEnabled, followPaused, headingUp, mapReady, runProgrammaticMove]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -198,6 +289,18 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, telemetryS
       <div ref={containerRef} className="h-full w-full bg-slate-950" />
 
       {basemapSwitcherEnabled && <MapBasemapSwitcher value={basemapId} onChange={handleBasemapChange} />}
+
+      <MapToolbar
+        followEnabled={followEnabled}
+        followPaused={followPaused}
+        headingUp={headingUp}
+        canRecenter={Boolean(droneLngLat)}
+        trackPointCount={displayTrack.length}
+        onFollowChange={handleFollowChange}
+        onHeadingUpChange={handleHeadingUpChange}
+        onRecenter={handleRecenter}
+        onFitTrack={handleFitTrack}
+      />
 
       <div className="pointer-events-none absolute bottom-6 left-1/2 z-10 -translate-x-1/2">
         <HudOverlay telemetry={telemetry} stale={telemetryStale} />
