@@ -204,7 +204,7 @@ export function App() {
                 />
               </ErrorBoundary>
               <ActivityLogPanel logs={logs} messages={status.mavlinkMessages ?? []} onClear={clearLogs} linkIssues={linkIssues} />
-              <VideoPanel targetEstimation={targetEstimation} />
+              <VideoPanel telemetry={telemetry} telemetryStale={telemetryStale} targetEstimation={targetEstimation} />
 
               {activeSourceMode !== "live" && (
                 <div className="absolute right-4 top-4 z-20">

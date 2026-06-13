@@ -11,6 +11,7 @@ import {
   type MapBasemapId
 } from "../lib/mapBasemaps";
 import { boundsForTrack, loadMapFollowPreferences, saveMapFollowPreferences } from "../lib/mapFollow";
+import { DRONE_CHEVRON_ICON_ID, droneMarkerCollection, ensureDroneChevronIcon } from "../lib/droneMapMarker";
 import { resolveHeadingDeg } from "../lib/resolveHeadingDeg";
 import type { TrackPoint } from "../replay/reconstruct";
 import { HudOverlay } from "./HudOverlay";
@@ -215,7 +216,7 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, telemetryS
     if (!map || !mapReady || !droneLngLat) return;
 
     const source = map.getSource("drone") as import("maplibre-gl").GeoJSONSource | undefined;
-    source?.setData(pointCollection(droneLngLat));
+    source?.setData(droneMarkerCollection(droneLngLat, heading));
 
     if (!centeredRef.current && initialPrefs.neverConfigured) {
       centeredRef.current = true;
@@ -223,7 +224,7 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, telemetryS
         activeMap.jumpTo({ center: droneLngLat, zoom: 15 });
       });
     }
-  }, [droneLngLat, mapReady, styleEpoch, initialPrefs.neverConfigured, runProgrammaticMove]);
+  }, [droneLngLat, heading, mapReady, styleEpoch, initialPrefs.neverConfigured, runProgrammaticMove]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -249,8 +250,15 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, telemetryS
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady || !map.getLayer("drone-point")) return;
-    map.setPaintProperty("drone-point", "circle-opacity", telemetryStale ? 0.45 : 1);
+
+    const staleOpacity = telemetryStale ? 0.45 : 1;
+    map.setPaintProperty("drone-point", "circle-opacity", staleOpacity);
     map.setPaintProperty("drone-point", "circle-color", telemetryStale ? "#94a3b8" : "#22d3ee");
+
+    if (map.getLayer("drone-heading")) {
+      map.setPaintProperty("drone-heading", "icon-opacity", staleOpacity);
+      map.setPaintProperty("drone-heading", "icon-color", telemetryStale ? "#94a3b8" : "#22d3ee");
+    }
   }, [telemetryStale, mapReady, styleEpoch]);
 
   useEffect(() => {
@@ -331,16 +339,37 @@ function addMapOverlays(map: MapInstance): void {
   }
 
   if (!map.getSource("drone")) {
+    ensureDroneChevronIcon(map);
     map.addSource("drone", { type: "geojson", data: emptyPointCollection() });
     map.addLayer({
       id: "drone-point",
       type: "circle",
       source: "drone",
+      filter: ["!", ["has", "heading"]],
       paint: {
         "circle-radius": 9,
         "circle-color": "#22d3ee",
         "circle-stroke-width": 2,
         "circle-stroke-color": "#0f172a"
+      }
+    });
+    map.addLayer({
+      id: "drone-heading",
+      type: "symbol",
+      source: "drone",
+      filter: ["has", "heading"],
+      layout: {
+        "icon-image": DRONE_CHEVRON_ICON_ID,
+        "icon-size": 0.9,
+        "icon-rotate": ["get", "heading"],
+        "icon-rotation-alignment": "map",
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true
+      },
+      paint: {
+        "icon-color": "#22d3ee",
+        "icon-halo-color": "#0f172a",
+        "icon-halo-width": 2
       }
     });
   }

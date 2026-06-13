@@ -1,22 +1,33 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import type { TelemetryState } from "@uav-ground-control-station/shared";
 import type { TargetEstimationController } from "../hooks/useTargetEstimation";
 import { isVideoSignalGood, useVideoSignalStatus } from "../hooks/useVideoSignalStatus";
 import { sanitizeHttpUrl } from "../lib/safeHttpUrl";
 import { GroundTargetPanel } from "./GroundTargetPanel";
+import { HudOverlay } from "./HudOverlay";
 
 type VideoKind = "mjpeg" | "hls" | "webrtc";
 
 const defaultUrl = sanitizeHttpUrl(import.meta.env.VITE_VIDEO_URL ?? "");
 const defaultKind = (import.meta.env.VITE_VIDEO_KIND as VideoKind | undefined) ?? "mjpeg";
+const VIDEO_HUD_KEY = "uav-gcs.video.hud";
+
+function loadVideoHudEnabled(): boolean {
+  const raw = localStorage.getItem(VIDEO_HUD_KEY);
+  return raw === null ? true : raw === "true";
+}
 
 interface VideoPanelProps {
+  telemetry: TelemetryState;
+  telemetryStale?: boolean;
   targetEstimation: TargetEstimationController;
 }
 
-export function VideoPanel({ targetEstimation }: VideoPanelProps) {
+export function VideoPanel({ telemetry, telemetryStale = false, targetEstimation }: VideoPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [url, setUrl] = useState(() => sanitizeHttpUrl(localStorage.getItem("uav-gcs.video.url") ?? defaultUrl));
   const [kind, setKind] = useState<VideoKind>(() => (localStorage.getItem("uav-gcs.video.kind") as VideoKind | null) ?? defaultKind);
+  const [showHud, setShowHud] = useState(() => loadVideoHudEnabled());
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const dragOffsetRef = useRef<{ x: number; y: number } | null>(null);
   const videoSignal = useVideoSignalStatus(url, kind);
@@ -26,6 +37,10 @@ export function VideoPanel({ targetEstimation }: VideoPanelProps) {
     localStorage.setItem("uav-gcs.video.url", url);
     localStorage.setItem("uav-gcs.video.kind", kind);
   }, [url, kind]);
+
+  useEffect(() => {
+    localStorage.setItem(VIDEO_HUD_KEY, String(showHud));
+  }, [showHud]);
 
   useEffect(() => {
     function move(event: globalThis.PointerEvent) {
@@ -82,9 +97,23 @@ export function VideoPanel({ targetEstimation }: VideoPanelProps) {
               <VideoSignalBadge status={videoSignal.status} />
             </div>
           </div>
-          <button className="rounded border border-white/10 px-2 py-1 text-xs text-slate-300 hover:border-cyan-300/40" onClick={() => setCollapsed((value) => !value)}>
-            {collapsed ? "Open" : "Hide"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={`rounded border px-2 py-1 text-xs transition ${
+                showHud
+                  ? "border-cyan-300/40 bg-cyan-500/15 text-cyan-100"
+                  : "border-white/10 text-slate-300 hover:border-cyan-300/40"
+              }`}
+              aria-pressed={showHud}
+              onClick={() => setShowHud((value) => !value)}
+            >
+              HUD
+            </button>
+            <button className="rounded border border-white/10 px-2 py-1 text-xs text-slate-300 hover:border-cyan-300/40" onClick={() => setCollapsed((value) => !value)}>
+              {collapsed ? "Open" : "Hide"}
+            </button>
+          </div>
         </header>
 
         {!collapsed && (
@@ -100,6 +129,11 @@ export function VideoPanel({ targetEstimation }: VideoPanelProps) {
                 <div className="absolute h-12 w-px bg-cyan-200/70" />
                 <div className="absolute h-px w-12 bg-cyan-200/70" />
               </div>
+              {showHud && (
+                <div className="pointer-events-none absolute left-1 top-1 z-10 scale-[0.72] origin-top-left opacity-90 sm:scale-[0.78]">
+                  <HudOverlay telemetry={telemetry} stale={telemetryStale} compact showTourTarget={false} />
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-[90px_1fr] gap-2 border-t border-line p-2">
               <select className="input-dark" value={kind} onChange={(event) => setKind(event.target.value as VideoKind)}>
