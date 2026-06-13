@@ -1,27 +1,38 @@
 import { useState } from "react";
 import type { MavlinkMessageStat } from "@uav-ground-control-station/shared";
 import type { ActivityLogEntry } from "../hooks/useTelemetry";
+import type { LinkIssue } from "../lib/linkErrors";
 
 interface ActivityLogPanelProps {
   logs: ActivityLogEntry[];
   messages: MavlinkMessageStat[];
   onClear: () => void;
+  linkIssues?: LinkIssue[];
 }
 
-export function ActivityLogPanel({ logs, messages, onClear }: ActivityLogPanelProps) {
+export function ActivityLogPanel({ logs, messages, onClear, linkIssues = [] }: ActivityLogPanelProps) {
   const [open, setOpen] = useState(false);
+  const primaryLinkIssue = linkIssues[0];
   const latestWarning = logs.find((entry) => entry.level === "warning" || entry.level === "error");
+  const headerMessage = primaryLinkIssue?.message ?? latestWarning?.message ?? logs[0]?.message ?? "No activity yet";
 
   return (
     <section data-tour="activity-log" className="absolute bottom-4 left-[340px] z-20 w-[520px] overflow-hidden rounded-xl border border-cyan-300/20 bg-slate-950/90 shadow-glow backdrop-blur">
       <header className="flex items-center justify-between border-b border-line px-3 py-2">
         <button className="text-left" onClick={() => setOpen((value) => !value)}>
           <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-200">Activity Log</div>
-          <div className="mt-0.5 max-w-[360px] truncate text-xs text-slate-400">
-            {latestWarning?.message ?? logs[0]?.message ?? "No activity yet"}
+          <div
+            className={`mt-0.5 max-w-[360px] truncate text-xs ${primaryLinkIssue ? "text-amber-200" : "text-slate-400"}`}
+          >
+            {headerMessage}
           </div>
         </button>
         <div className="flex items-center gap-2">
+          {linkIssues.length > 0 && (
+            <span className="rounded-full border border-amber-400/35 bg-amber-500/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-amber-200">
+              Link
+            </span>
+          )}
           <span className="rounded-full border border-white/10 px-2 py-1 font-mono text-[11px] text-slate-300">{logs.length}</span>
           {open && (
             <button className="rounded border border-white/10 px-2 py-1 text-xs text-slate-300 hover:border-cyan-300/40" onClick={onClear}>
@@ -36,6 +47,18 @@ export function ActivityLogPanel({ logs, messages, onClear }: ActivityLogPanelPr
 
       {open && (
         <div className="max-h-[320px] space-y-2 overflow-y-auto p-2">
+          {linkIssues.length > 0 && (
+            <div className="space-y-2 rounded-lg border border-amber-400/25 bg-amber-950/30 p-2">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-amber-200">Link issues</div>
+              {linkIssues.map((issue) => (
+                <div key={issue.id} className="rounded border border-white/5 bg-black/25 px-2 py-1.5 text-[11px] leading-snug text-amber-100">
+                  <div className="font-semibold uppercase tracking-[0.1em] text-amber-200/90">{issue.title}</div>
+                  <div className="mt-1 text-slate-200">{issue.message}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="rounded-lg border border-white/5 bg-black/25 p-2">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-[10px] uppercase tracking-[0.18em] text-cyan-200">Frame message stats</span>

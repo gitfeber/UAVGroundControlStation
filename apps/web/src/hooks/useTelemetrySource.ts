@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import type { ConnectRequest, TelemetryState, TelemetrySourceMode } from "@uav-ground-control-station/shared";
+import type { LinkConnection } from "../lib/linkErrors";
 import { useTelemetry, type ActivityLogEntry } from "./useTelemetry";
 import { useReplayController, type ReplayController } from "./useReplayController";
 
@@ -25,6 +26,7 @@ export interface TelemetrySource {
   ports: ReturnType<typeof useTelemetry>["ports"];
   logs: ActivityLogEntry[];
   error: string | null;
+  linkConnection: LinkConnection | null;
   wsConnected: boolean;
   runtimeMode: "web" | "desktop" | "cloud";
   refreshPorts: () => Promise<void>;
@@ -119,6 +121,7 @@ export function useTelemetrySource(): TelemetrySource {
       ports: live.ports,
       logs,
       error: live.error,
+      linkConnection: live.linkConnection,
       wsConnected: live.wsConnected,
       runtimeMode: live.runtimeMode,
       refreshPorts,
@@ -140,6 +143,7 @@ export function useTelemetrySource(): TelemetrySource {
       live.loggingStatus,
       live.ports,
       live.error,
+      live.linkConnection,
       live.wsConnected,
       live.runtimeMode,
       logs,
