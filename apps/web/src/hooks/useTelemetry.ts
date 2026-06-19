@@ -21,11 +21,7 @@ import {
 } from "../lib/linkErrors";
 import { runtimeMode } from "../lib/runtimeMode";
 import { downloadJsonlSession, SessionRecorder, type SessionRecorderSnapshot } from "../lib/sessionRecorder";
-import {
-  fileNameFromLogPath,
-  jsonlByteLength,
-  type StoppedLogPayload
-} from "../lib/logReplayHandoff";
+import { fileNameFromLogPath, type StoppedLogPayload } from "../lib/logReplayHandoff";
 import { WebSerialLink } from "../link/webSerialLink";
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? "";
