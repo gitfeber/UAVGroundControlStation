@@ -1,6 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
 import type { ConnectRequest, TelemetryState, TelemetrySourceMode } from "@uav-ground-control-station/shared";
 import type { LinkConnection } from "../lib/linkErrors";
+import { canOfferLogReplayHandoff, jsonlByteLength } from "../lib/logReplayHandoff";
+import type { SessionRecorderSnapshot } from "../lib/sessionRecorder";
+import { parseReplayLog, ReplayParseError } from "../replay/parser";
 import { useTelemetry, type ActivityLogEntry } from "./useTelemetry";
 import { useReplayController, type ReplayController } from "./useReplayController";
 
@@ -29,6 +32,8 @@ export interface TelemetrySource {
   linkConnection: LinkConnection | null;
   wsConnected: boolean;
   runtimeMode: "web" | "desktop" | "cloud";
+  browserSessionExportEnabled: boolean;
+  sessionSnapshot: SessionRecorderSnapshot;
   refreshPorts: () => Promise<void>;
   connect: (request: ConnectRequest) => Promise<void>;
   disconnect: () => Promise<void>;
@@ -36,6 +41,10 @@ export interface TelemetrySource {
   startLogging: () => Promise<void>;
   stopLogging: () => Promise<void>;
   clearLogs: () => void;
+  downloadSession: () => void;
+  canOpenLogInReplay: boolean;
+  logReplayHandoffError: string | null;
+  openStoppedLogInReplay: () => Promise<void>;
 
   // Source-mode surface.
   activeSourceMode: TelemetrySourceMode;
@@ -51,6 +60,7 @@ export function useTelemetrySource(): TelemetrySource {
   const live = useTelemetry();
   const replay = useReplayController();
   const [activeSourceMode, setActiveSourceMode] = useState<TelemetrySourceMode>("live");
+  const [logReplayHandoffError, setLogReplayHandoffError] = useState<string | null>(null);
 
   const liveControlsLocked = activeSourceMode !== "live";
 
@@ -113,6 +123,42 @@ export function useTelemetrySource(): TelemetrySource {
     replay.clearReplaySimLogs();
   }, [live, replay]);
 
+  const canOpenLogInReplay = useMemo(
+    () =>
+      canOfferLogReplayHandoff({
+        runtimeMode: live.runtimeMode,
+        loggingActive: live.loggingStatus.active,
+        loggingFilePath: live.loggingStatus.filePath,
+        sessionEventCount: live.sessionSnapshot.eventCount,
+        liveControlsLocked
+      }),
+    [
+      live.runtimeMode,
+      live.loggingStatus.active,
+      live.loggingStatus.filePath,
+      live.sessionSnapshot.eventCount,
+      liveControlsLocked
+    ]
+  );
+
+  const openStoppedLogInReplay = useCallback(async () => {
+    setLogReplayHandoffError(null);
+    try {
+      const payload = await live.readStoppedSessionLog();
+      const result = parseReplayLog(payload.text, payload.fileName, jsonlByteLength(payload.text));
+      setActiveSourceMode("replay");
+      replay.loadParsedLog(result);
+    } catch (cause: unknown) {
+      const message =
+        cause instanceof ReplayParseError
+          ? cause.message
+          : cause instanceof Error
+            ? cause.message
+            : "Unable to open the session log in replay mode.";
+      setLogReplayHandoffError(message);
+    }
+  }, [live, replay]);
+
   return useMemo(
     () => ({
       telemetry,
@@ -124,6 +170,8 @@ export function useTelemetrySource(): TelemetrySource {
       linkConnection: live.linkConnection,
       wsConnected: live.wsConnected,
       runtimeMode: live.runtimeMode,
+      browserSessionExportEnabled: live.browserSessionExportEnabled,
+      sessionSnapshot: live.sessionSnapshot,
       refreshPorts,
       connect,
       disconnect,
@@ -131,6 +179,10 @@ export function useTelemetrySource(): TelemetrySource {
       startLogging,
       stopLogging,
       clearLogs,
+      downloadSession: live.downloadSession,
+      canOpenLogInReplay,
+      logReplayHandoffError,
+      openStoppedLogInReplay,
       activeSourceMode,
       setSourceMode,
       liveControlsLocked,
@@ -146,6 +198,9 @@ export function useTelemetrySource(): TelemetrySource {
       live.linkConnection,
       live.wsConnected,
       live.runtimeMode,
+      live.browserSessionExportEnabled,
+      live.sessionSnapshot,
+      live.downloadSession,
       logs,
       refreshPorts,
       connect,
@@ -154,6 +209,9 @@ export function useTelemetrySource(): TelemetrySource {
       startLogging,
       stopLogging,
       clearLogs,
+      canOpenLogInReplay,
+      logReplayHandoffError,
+      openStoppedLogInReplay,
       activeSourceMode,
       setSourceMode,
       liveControlsLocked,

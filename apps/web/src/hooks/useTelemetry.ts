@@ -20,6 +20,8 @@ import {
   type LinkConnection
 } from "../lib/linkErrors";
 import { runtimeMode } from "../lib/runtimeMode";
+import { downloadJsonlSession, SessionRecorder, type SessionRecorderSnapshot } from "../lib/sessionRecorder";
+import { fileNameFromLogPath, type StoppedLogPayload } from "../lib/logReplayHandoff";
 import { WebSerialLink } from "../link/webSerialLink";
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? "";
@@ -95,6 +97,15 @@ export function useTelemetry() {
   const warningStateRef = useRef({ noRawBytes: false, noMavlinkPackets: false });
   const nextLogIdRef = useRef(1);
   const webSerialLinkRef = useRef<WebSerialLink | null>(null);
+  const sessionRecorderRef = useRef<SessionRecorder | null>(null);
+  const sessionSoftWarnLoggedRef = useRef(false);
+  const [sessionSnapshot, setSessionSnapshot] = useState<SessionRecorderSnapshot>({
+    eventCount: 0,
+    approximateBytes: 0,
+    softWarnExceeded: false
+  });
+
+  const browserSessionExportEnabled = mode === "cloud" || mode === "web";
 
   const addLog = useCallback((level: ActivityLogEntry["level"], message: string) => {
     const entry: ActivityLogEntry = {
@@ -106,6 +117,72 @@ export function useTelemetry() {
 
     setLogs((current) => [entry, ...current].slice(0, 200));
   }, []);
+
+  const refreshSessionSnapshot = useCallback(() => {
+    const recorder = sessionRecorderRef.current;
+    if (!recorder) {
+      setSessionSnapshot({ eventCount: 0, approximateBytes: 0, softWarnExceeded: false });
+      return;
+    }
+    setSessionSnapshot(recorder.snapshot);
+  }, []);
+
+  const recordSessionActivity = useCallback(
+    (level: ActivityLogEntry["level"], message: string) => {
+      if (!browserSessionExportEnabled) return;
+      const recorder = sessionRecorderRef.current;
+      if (!recorder) return;
+      const mappedLevel = level === "warning" ? "warn" : level === "success" ? "info" : level;
+      recorder.recordActivity(mappedLevel, message);
+      if (recorder.snapshot.softWarnExceeded && !sessionSoftWarnLoggedRef.current) {
+        sessionSoftWarnLoggedRef.current = true;
+        addLog(
+          "warning",
+          "Session buffer exceeded ~25 MB. Download the session soon or reset to avoid high memory use."
+        );
+      }
+      refreshSessionSnapshot();
+    },
+    [addLog, browserSessionExportEnabled, refreshSessionSnapshot]
+  );
+
+  const clearSessionRecorder = useCallback(() => {
+    sessionRecorderRef.current?.clear();
+    sessionSoftWarnLoggedRef.current = false;
+    refreshSessionSnapshot();
+  }, [refreshSessionSnapshot]);
+
+  const downloadSession = useCallback(() => {
+    const recorder = sessionRecorderRef.current;
+    if (!recorder?.hasBufferedEvents()) return;
+    downloadJsonlSession(recorder.toJsonlText(), recorder.suggestedFileName());
+    addLog("success", "Session downloaded as replay JSONL.");
+  }, [addLog]);
+
+  const readStoppedSessionLog = useCallback(async (): Promise<StoppedLogPayload> => {
+    if (!loggingStatus.active && loggingStatus.filePath) {
+      const filePath = loggingStatus.filePath;
+      const fileName = fileNameFromLogPath(filePath);
+      if (mode === "desktop") {
+        const text = await invokeTauri<string>("read_session_log", { path: filePath });
+        return { text, fileName, source: "disk" };
+      }
+      const payload = await requestJson<{ text: string; fileName: string }>("/api/logging/read");
+      return { ...payload, source: "disk" };
+    }
+
+    const recorder = sessionRecorderRef.current;
+    if (!recorder?.hasBufferedEvents()) {
+      throw new Error("No session log is available for replay.");
+    }
+
+    const text = recorder.toJsonlText();
+    return {
+      text,
+      fileName: recorder.suggestedFileName(),
+      source: "buffer"
+    };
+  }, [loggingStatus.active, loggingStatus.filePath, mode]);
 
   const clearLogs = useCallback(() => {
     setLogs([]);
@@ -170,6 +247,7 @@ export function useTelemetry() {
         const message = connectFailureMessage(cause);
         setError(message);
         addLog("error", linkIssueLogMessage(describeConnectFailure(cause)));
+        recordSessionActivity("error", linkIssueLogMessage(describeConnectFailure(cause)));
         throw cause;
       }
       return;
@@ -195,21 +273,24 @@ export function useTelemetry() {
         );
       }
       addLog("success", `Serial port opened: ${request.path}. 8N1/no-flow-control, DTR/RTS enabled, initial GCS heartbeat written.`);
+      recordSessionActivity("success", `Serial port opened: ${request.path}.`);
     } catch (cause: unknown) {
       const message = connectFailureMessage(cause);
       activeConnectionRef.current = null;
       setLinkConnection(null);
       setError(message);
       addLog("error", linkIssueLogMessage(describeConnectFailure(cause)));
+      recordSessionActivity("error", linkIssueLogMessage(describeConnectFailure(cause)));
       throw cause;
     }
-  }, [addLog, mode]);
+  }, [addLog, mode, recordSessionActivity]);
 
   const disconnect = useCallback(async () => {
     setError(null);
     if (mode === "cloud") {
       await webSerialLinkRef.current?.disconnect("Disconnected by operator.");
       addLog("info", "Serial device disconnected.");
+      recordSessionActivity("info", "Serial device disconnected.");
       activeConnectionRef.current = null;
       setLinkConnection(null);
       return;
@@ -220,11 +301,13 @@ export function useTelemetry() {
       setStatus(await requestJson<BackendStatus>("/api/disconnect", { method: "POST" }));
     }
     addLog("info", "Serial port disconnected.");
+    recordSessionActivity("info", "Serial port disconnected.");
     activeConnectionRef.current = null;
     setLinkConnection(null);
-  }, [addLog, mode]);
+  }, [addLog, mode, recordSessionActivity]);
 
   const resetSession = useCallback(async () => {
+    clearSessionRecorder();
     if (mode === "cloud") {
       webSerialLinkRef.current?.resetSession();
       warningStateRef.current = { noRawBytes: false, noMavlinkPackets: false };
@@ -238,12 +321,11 @@ export function useTelemetry() {
     }
     warningStateRef.current = { noRawBytes: false, noMavlinkPackets: false };
     addLog("info", "Telemetry session reset.");
-  }, [addLog, mode]);
+  }, [addLog, clearSessionRecorder, mode]);
 
   const startLogging = useCallback(async () => {
     if (mode === "cloud") {
-      // No disk in the browser; persistent logging is deferred (future hosted backend).
-      addLog("warning", "Telemetry logging is not available in the browser runtime yet.");
+      addLog("info", "Use Download session in the top bar to save replay JSONL locally. Nothing is uploaded.");
       return;
     }
     if (mode === "desktop") {
@@ -286,13 +368,16 @@ export function useTelemetry() {
         setWsConnected(true);
         setError(null);
         addLog("success", "Serial device opened via Web Serial.");
+        recordSessionActivity("success", "Serial device opened via Web Serial.");
       },
       onClose: (reason) => {
         setWsConnected(false);
         activeConnectionRef.current = null;
         setLinkConnection(null);
         const issue = describeSerialError(reason);
-        addLog("warning", issue ? linkIssueLogMessage(issue) : `Serial link closed: ${reason}`);
+        const message = issue ? linkIssueLogMessage(issue) : `Serial link closed: ${reason}`;
+        addLog("warning", message);
+        recordSessionActivity("warning", message);
       }
     });
     webSerialLinkRef.current = link;
@@ -301,7 +386,7 @@ export function useTelemetry() {
       webSerialLinkRef.current = null;
       void link.disconnect("Leaving the dashboard.");
     };
-  }, [addLog, mode]);
+  }, [addLog, mode, recordSessionActivity]);
 
   useEffect(() => {
     statusRef.current = status;
@@ -309,10 +394,12 @@ export function useTelemetry() {
 
     if (!previous.serialConnected && status.serialConnected) {
       addLog("success", "Serial connection is active.");
+      recordSessionActivity("success", "Serial connection is active.");
     }
 
     if (previous.serialConnected && !status.serialConnected) {
       addLog("warning", "Serial connection closed.");
+      recordSessionActivity("warning", "Serial connection closed.");
     }
 
     if ((previous.rawBytes ?? 0) === 0 && (status.rawBytes ?? 0) > 0) {
@@ -333,17 +420,21 @@ export function useTelemetry() {
     ) {
       const issue = describeParserSpike(status);
       if (issue) {
-        addLog("warning", linkIssueLogMessage(issue));
+        const message = linkIssueLogMessage(issue);
+        addLog("warning", message);
+        recordSessionActivity("warning", message);
       }
     }
 
     if (status.lastSerialError && status.lastSerialError !== previous.lastSerialError) {
       const issue = describeSerialError(status.lastSerialError);
-      addLog("error", issue ? linkIssueLogMessage(issue) : `Serial error: ${status.lastSerialError}`);
+      const message = issue ? linkIssueLogMessage(issue) : `Serial error: ${status.lastSerialError}`;
+      addLog("error", message);
+      recordSessionActivity("error", message);
     }
 
     lastStatusRef.current = status;
-  }, [addLog, status]);
+  }, [addLog, recordSessionActivity, status]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -493,6 +584,41 @@ export function useTelemetry() {
     return () => window.clearInterval(timer);
   }, [mode, refreshStatus]);
 
+  useEffect(() => {
+    if (!browserSessionExportEnabled) {
+      sessionRecorderRef.current = null;
+      refreshSessionSnapshot();
+      return;
+    }
+
+    const recorder = new SessionRecorder();
+    sessionRecorderRef.current = recorder;
+    recorder.recordActivity("info", "Browser session recording started.");
+    refreshSessionSnapshot();
+
+    return () => {
+      sessionRecorderRef.current = null;
+    };
+  }, [browserSessionExportEnabled, refreshSessionSnapshot]);
+
+  useEffect(() => {
+    if (!browserSessionExportEnabled) return;
+    sessionRecorderRef.current?.recordTelemetry(telemetry);
+    refreshSessionSnapshot();
+  }, [browserSessionExportEnabled, refreshSessionSnapshot, telemetry]);
+
+  useEffect(() => {
+    if (!browserSessionExportEnabled || sessionSnapshot.eventCount === 0) return;
+
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [browserSessionExportEnabled, sessionSnapshot.eventCount]);
+
   return useMemo(
     () => ({
       telemetry,
@@ -503,6 +629,8 @@ export function useTelemetry() {
       error,
       wsConnected,
       runtimeMode: mode,
+      browserSessionExportEnabled,
+      sessionSnapshot,
       refreshPorts,
       connect,
       disconnect,
@@ -510,6 +638,8 @@ export function useTelemetry() {
       startLogging,
       stopLogging,
       clearLogs,
+      downloadSession,
+      readStoppedSessionLog,
       linkConnection
     }),
     [
@@ -521,6 +651,8 @@ export function useTelemetry() {
       error,
       wsConnected,
       mode,
+      browserSessionExportEnabled,
+      sessionSnapshot,
       refreshPorts,
       connect,
       disconnect,
@@ -528,6 +660,8 @@ export function useTelemetry() {
       startLogging,
       stopLogging,
       clearLogs,
+      downloadSession,
+      readStoppedSessionLog,
       linkConnection
     ]
   );

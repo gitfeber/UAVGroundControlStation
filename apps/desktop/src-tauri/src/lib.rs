@@ -408,9 +408,33 @@ fn stop_logging(state: State<DesktopState>) -> Result<LoggingStatus, String> {
         writer.flush().map_err(|error| error.to_string())?;
     }
     logging.writer = None;
-    logging.file_path = None;
 
     Ok(logging_status_from_logger(&logging))
+}
+
+#[tauri::command]
+fn read_session_log(path: String, app: AppHandle) -> Result<String, String> {
+    let logs_dir = app
+        .path()
+        .app_log_dir()
+        .unwrap_or_else(|_| PathBuf::from("logs"));
+    let candidate = PathBuf::from(path.trim());
+    let canonical = candidate
+        .canonicalize()
+        .map_err(|_| "Session log file not found.".to_string())?;
+    let logs_canonical = logs_dir
+        .canonicalize()
+        .unwrap_or_else(|_| logs_dir.clone());
+    if !canonical.starts_with(&logs_canonical) {
+        return Err("Session log path is not allowed.".to_string());
+    }
+    let lower = canonical
+        .to_string_lossy()
+        .to_ascii_lowercase();
+    if !lower.ends_with(".jsonl") {
+        return Err("Session log must be a .jsonl file.".to_string());
+    }
+    std::fs::read_to_string(canonical).map_err(|_| "Unable to read session log.".to_string())
 }
 
 #[tauri::command]
@@ -514,6 +538,7 @@ pub fn run() {
             get_telemetry,
             start_logging,
             stop_logging,
+            read_session_log,
             logging_status,
             load_terrain_model,
             get_terrain_metadata,

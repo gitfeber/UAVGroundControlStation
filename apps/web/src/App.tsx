@@ -38,12 +38,18 @@ export function App() {
     linkConnection,
     wsConnected,
     runtimeMode,
+    browserSessionExportEnabled,
+    sessionSnapshot,
     refreshPorts,
     connect,
     disconnect,
     resetSession,
     startLogging,
     stopLogging,
+    downloadSession,
+    canOpenLogInReplay,
+    logReplayHandoffError,
+    openStoppedLogInReplay,
     clearLogs,
     activeSourceMode,
     setSourceMode,
@@ -170,6 +176,12 @@ export function App() {
           onReset={resetAll}
           onStartLogging={startLogging}
           onStopLogging={stopLogging}
+          onDownloadSession={downloadSession}
+          sessionExportEnabled={browserSessionExportEnabled}
+          sessionEventCount={sessionSnapshot.eventCount}
+          canOpenLogInReplay={canOpenLogInReplay}
+          logReplayHandoffError={logReplayHandoffError}
+          onOpenLogInReplay={openStoppedLogInReplay}
           onRestartTour={() => setTourRestartToken((token) => token + 1)}
           linkIssues={linkIssues}
         />

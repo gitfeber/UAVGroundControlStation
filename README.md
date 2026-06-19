@@ -32,7 +32,7 @@ The **Hosted Web App** (internal runtime key `cloud`) is a pure browser SPA that
 | Static SPA over HTTPS | Accounts or login |
 | Web Serial CRSF + MAVLink link (user-granted port only) | Server-side telemetry persistence |
 | Replay and simulation (frontend-only, no upload) | Fleet or project management |
-| Same dashboard UI as desktop/browser dev | Cloud logging or sync |
+| **Download session** — buffer live telemetry in memory; export replay JSONL locally (no upload) | Cloud logging or sync |
 | | Billing or paid tiers |
 
 Self-host the Hosted Web App with `pnpm build:cloud` and serve **`apps/web/dist` from that command only** — not the output of `pnpm build` (desktop/Node stack). A wrong artifact shows the COM port dropdown and spams `WebSocket connection to …/ws failed` because the app is in `web` mode instead of `cloud`. Do not embed the app in a cross-origin iframe without a `Permissions-Policy` that allows `serial` for your origin — Web Serial is blocked by default in embedded contexts.
@@ -61,7 +61,7 @@ Prefer bench testing and disconnected telemetry validation before using the soft
 - **Optional video stream** (MJPEG, etc.) via environment variables; crosshair overlay; when the stream is live, a **Ground Target** panel docks beside the camera feed
 - **Ground target estimation** (desktop) — image-center target with GeoTIFF DEM ray marching, map marker, line-of-sight, and sample-log export (shown next to the camera when video is live)
 - **Preflight health advisory** — sensor and link health checks with configurable thresholds
-- **Session logging** and reset for new flights
+- **Session logging** — desktop and browser dev write JSONL to disk via **Start Log** / **Stop Log**; after stopping, use **Open in Replay** to load the saved log without manual import. The **Hosted Web App** and browser dev also buffer telemetry in memory — **Download session** exports replay JSONL locally, and **Open in Replay** loads the buffer directly (never uploaded). **Reset** clears the in-memory buffer.
 - **Onboarding tour** — first-run walkthrough of link controls, telemetry sidebar, map, camera, and activity log; skip anytime; restart from the **?** button in the top bar (`localStorage` keys `uav-gcs.onboarding.*`)
 - **Replay & Simulation** — frontend-only, read-only telemetry sources that drive the same dashboard without hardware: replay recorded `.jsonl`/`.json` logs (start/pause/seek/step, speed and timing modes) or run deterministic seeded simulations. See [`docs/replay-mode.md`](docs/replay-mode.md) and [`docs/adr/0003-frontend-only-replay-simulation.md`](docs/adr/0003-frontend-only-replay-simulation.md)
 - **Flight Review** — post-flight analysis over a loaded replay log (not simulation): summary stats, findings, colored path, seekable timeline with markers, and five click-to-seek graphs. Open manually from replay controls while in **Replay** mode; shares the replay clock with dashboard scrubbing. Frontend-only — nothing is uploaded. See [`docs/adr/0007-flight-review-replay-analysis-view.md`](docs/adr/0007-flight-review-replay-analysis-view.md)
