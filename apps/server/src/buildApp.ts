@@ -98,6 +98,8 @@ export async function buildApp(services?: Partial<AppServices>): Promise<Fastify
 
   app.get("/api/logging/status", async () => logger.status());
 
+  app.get("/api/logging/read", { preHandler: guardControlRoute }, async () => logger.readStoppedLog());
+
   app.get("/ws", { websocket: true }, (socket) => {
     hub.add(socket, latestTelemetry, serial.getStatus());
   });

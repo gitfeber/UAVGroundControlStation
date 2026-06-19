@@ -37,6 +37,9 @@ interface TopbarProps {
   onDownloadSession?: () => void;
   sessionEventCount?: number;
   sessionExportEnabled?: boolean;
+  canOpenLogInReplay?: boolean;
+  logReplayHandoffError?: string | null;
+  onOpenLogInReplay?: () => Promise<void>;
   onRestartTour: () => void;
   linkIssues?: LinkIssue[];
 }
@@ -65,6 +68,9 @@ export function Topbar({
   onDownloadSession,
   sessionEventCount = 0,
   sessionExportEnabled = false,
+  canOpenLogInReplay = false,
+  logReplayHandoffError = null,
+  onOpenLogInReplay,
   onRestartTour,
   linkIssues = []
 }: TopbarProps) {
@@ -303,6 +309,32 @@ export function Topbar({
           {linkIssues.map((issue) => (
             <LinkIssueBanner key={issue.id} issue={issue} />
           ))}
+        </div>
+      )}
+
+      {activeSourceMode === "live" && canOpenLogInReplay && onOpenLogInReplay && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/35 bg-amber-950/70 px-3 py-2 text-xs text-amber-100">
+          <div className="leading-snug">
+            {loggingStatus.filePath && !loggingStatus.active
+              ? "Session log saved to disk."
+              : "Session buffer is ready for replay."}
+            {" "}
+            Open it in Replay to scrub the flight without re-importing a file. Flight Review stays manual.
+          </div>
+          <button
+            type="button"
+            className="btn-secondary shrink-0 whitespace-nowrap border-amber-300/40 text-amber-50"
+            disabled={busy}
+            onClick={() => run(onOpenLogInReplay)}
+          >
+            Open in Replay
+          </button>
+        </div>
+      )}
+
+      {logReplayHandoffError && (
+        <div className="mt-2 rounded-lg border border-red-400/30 bg-red-950/90 px-3 py-2 text-xs text-red-100">
+          {logReplayHandoffError}
         </div>
       )}
     </header>

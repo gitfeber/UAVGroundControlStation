@@ -21,6 +21,11 @@ import {
 } from "../lib/linkErrors";
 import { runtimeMode } from "../lib/runtimeMode";
 import { downloadJsonlSession, SessionRecorder, type SessionRecorderSnapshot } from "../lib/sessionRecorder";
+import {
+  fileNameFromLogPath,
+  jsonlByteLength,
+  type StoppedLogPayload
+} from "../lib/logReplayHandoff";
 import { WebSerialLink } from "../link/webSerialLink";
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? "";
@@ -157,6 +162,31 @@ export function useTelemetry() {
     downloadJsonlSession(recorder.toJsonlText(), recorder.suggestedFileName());
     addLog("success", "Session downloaded as replay JSONL.");
   }, [addLog]);
+
+  const readStoppedSessionLog = useCallback(async (): Promise<StoppedLogPayload> => {
+    if (!loggingStatus.active && loggingStatus.filePath) {
+      const filePath = loggingStatus.filePath;
+      const fileName = fileNameFromLogPath(filePath);
+      if (mode === "desktop") {
+        const text = await invokeTauri<string>("read_session_log", { path: filePath });
+        return { text, fileName, source: "disk" };
+      }
+      const payload = await requestJson<{ text: string; fileName: string }>("/api/logging/read");
+      return { ...payload, source: "disk" };
+    }
+
+    const recorder = sessionRecorderRef.current;
+    if (!recorder?.hasBufferedEvents()) {
+      throw new Error("No session log is available for replay.");
+    }
+
+    const text = recorder.toJsonlText();
+    return {
+      text,
+      fileName: recorder.suggestedFileName(),
+      source: "buffer"
+    };
+  }, [loggingStatus.active, loggingStatus.filePath, mode]);
 
   const clearLogs = useCallback(() => {
     setLogs([]);
@@ -613,6 +643,7 @@ export function useTelemetry() {
       stopLogging,
       clearLogs,
       downloadSession,
+      readStoppedSessionLog,
       linkConnection
     }),
     [
@@ -634,6 +665,7 @@ export function useTelemetry() {
       stopLogging,
       clearLogs,
       downloadSession,
+      readStoppedSessionLog,
       linkConnection
     ]
   );
