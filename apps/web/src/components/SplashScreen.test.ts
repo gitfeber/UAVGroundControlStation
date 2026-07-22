@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { progressAtElapsed } from "./SplashScreen";
+import { progressAtElapsed } from "../lib/splashProgress";
 
 describe("progressAtElapsed", () => {
   it("returns 0 before the first keyframe", () => {

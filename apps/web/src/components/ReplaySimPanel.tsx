@@ -60,8 +60,7 @@ export function ReplaySimPanel({ mode, replay, canOpenFlightReview = false, onOp
 
   const status = controllerState.status;
   const isReplay = mode === "replay";
-  const accentBorder = isReplay ? "border-amber-400/40" : "border-purple-400/40";
-  const accentText = isReplay ? "text-amber-200" : "text-purple-200";
+  const accentText = isReplay ? "text-amber-200" : "text-slate-300";
 
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
     setLoadError(null);
@@ -117,18 +116,19 @@ export function ReplaySimPanel({ mode, replay, canOpenFlightReview = false, onOp
 
   return (
     <section
-      className={`pointer-events-auto w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border ${accentBorder} bg-slate-950/92 shadow-glow backdrop-blur`}
+      className="replay-console"
+      data-mode={mode}
     >
-      <header className="flex items-center justify-between border-b border-line px-3 py-2">
-        <div className={`text-[10px] font-semibold uppercase tracking-[0.22em] ${accentText}`}>
-          {isReplay ? "Replay" : "Simulation"} controls
+      <header className="flex min-h-9 items-center justify-between border-b border-white/10 px-2">
+        <div className={`panel-kicker ${accentText}`}>
+          Source / {isReplay ? "Replay" : "Simulation"}
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded-full border border-white/10 px-2 py-0.5 font-mono text-[10px] uppercase text-slate-300">
+          <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-slate-400">
             {status}
           </span>
           <button
-            className="rounded border border-white/10 px-2 py-0.5 text-xs text-slate-300 hover:border-cyan-300/40"
+            className="operator-button h-6 px-2"
             onClick={() => setOpen((value) => !value)}
           >
             {open ? "Hide" : "Open"}
@@ -137,7 +137,7 @@ export function ReplaySimPanel({ mode, replay, canOpenFlightReview = false, onOp
       </header>
 
       {open && (
-        <div className="max-h-[calc(100vh-8rem)] space-y-3 overflow-y-auto p-3 text-sm">
+        <div className="max-h-[calc(100vh-8rem)] space-y-3 overflow-y-auto p-2 text-xs">
           {isReplay ? (
             <div className="space-y-2">
               <input
@@ -145,7 +145,7 @@ export function ReplaySimPanel({ mode, replay, canOpenFlightReview = false, onOp
                 type="file"
                 accept=".jsonl,.json"
                 onChange={handleFile}
-                className="block w-full text-xs text-slate-300 file:mr-2 file:rounded-md file:border file:border-cyan-300/30 file:bg-slate-900 file:px-2 file:py-1 file:text-xs file:text-cyan-200 hover:file:border-cyan-300/60"
+                className="block w-full font-mono text-[9px] text-slate-400 file:mr-2 file:border file:border-white/15 file:bg-slate-900 file:px-2 file:py-1 file:text-[9px] file:text-slate-300"
               />
               <p className="text-[11px] text-slate-500">
                 Loads <span className="font-mono">.jsonl</span>/<span className="font-mono">.json</span> telemetry logs locally. Logs may contain GPS/location data; nothing is uploaded.
@@ -167,10 +167,10 @@ export function ReplaySimPanel({ mode, replay, canOpenFlightReview = false, onOp
           )}
 
           {loadError && (
-            <div className="rounded-lg border border-red-400/30 bg-red-950/70 px-2 py-1.5 text-[11px] text-red-100">{loadError}</div>
+            <div className="border border-red-400/30 bg-red-950/70 px-2 py-1.5 text-[11px] text-red-100">{loadError}</div>
           )}
           {loadWarning && !loadError && (
-            <div className="rounded-lg border border-yellow-300/30 bg-yellow-950/40 px-2 py-1.5 text-[11px] text-yellow-100">{loadWarning}</div>
+            <div className="border border-yellow-300/30 bg-yellow-950/40 px-2 py-1.5 text-[11px] text-yellow-100">{loadWarning}</div>
           )}
 
           {controllerState.metadata && <MetadataSummary metadata={controllerState.metadata} />}
@@ -210,7 +210,7 @@ export function ReplaySimPanel({ mode, replay, canOpenFlightReview = false, onOp
               value={Math.min(controllerState.currentReplayTimeMs, durationMs)}
               disabled={!canPlay}
               onChange={(event) => replay.seek(Number(event.target.value))}
-              className="w-full accent-cyan-400 disabled:opacity-40"
+              className="w-full accent-emerald-500 disabled:opacity-40"
             />
             <div className="flex justify-between font-mono text-[11px] text-slate-400">
               <span>{formatClock(controllerState.currentReplayTimeMs)}</span>
@@ -307,7 +307,7 @@ function MetadataSummary({ metadata }: { metadata: NonNullable<ReplayController[
   ].filter(Boolean);
 
   return (
-    <div className="rounded-lg border border-white/5 bg-black/25 p-2 text-[11px] text-slate-300">
+    <div className="border border-white/5 bg-black/25 p-2 text-[11px] text-slate-300">
       <div className="truncate font-mono text-slate-200" title={metadata.fileName}>{metadata.fileName}</div>
       <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 font-mono text-slate-400">
         <span>{metadata.eventCount} events</span>
@@ -317,7 +317,7 @@ function MetadataSummary({ metadata }: { metadata: NonNullable<ReplayController[
         <span>{metadata.activityEventCount} activity</span>
         <span>{metadata.skippedEventCount} skipped</span>
       </div>
-      {flags.length > 0 && <div className="mt-1 text-cyan-200">{flags.join(" · ")}</div>}
+      {flags.length > 0 && <div className="mt-1 text-emerald-200">{flags.join(" · ")}</div>}
     </div>
   );
 }
@@ -333,8 +333,8 @@ function Diagnostics(props: {
   lastError: string | null;
 }) {
   return (
-    <div className="rounded-lg border border-white/5 bg-black/25 p-2">
-      <div className="mb-1 text-[10px] uppercase tracking-[0.18em] text-cyan-200">Diagnostics</div>
+    <div className="border border-white/5 bg-black/25 p-2">
+      <div className="mb-1 panel-kicker">Diagnostics</div>
       <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 font-mono text-[11px] text-slate-400">
         <span>Event {props.currentEventIndex + 1}/{props.eventCount}</span>
         <span>{props.averageEmitRateHz} Hz avg</span>
@@ -385,7 +385,7 @@ function LabeledSelect({
     <label className="block">
       <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500">{label}</span>
       <select
-        className="mt-0.5 h-8 w-full rounded-lg border border-cyan-300/20 bg-slate-900 px-2 text-xs text-slate-100 outline-none focus:border-cyan-300/60"
+        className="input-dark mt-0.5 w-full"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -417,7 +417,7 @@ function LabeledNumber({
       <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500">{label}</span>
       <input
         type="number"
-        className="mt-0.5 h-8 w-full rounded-lg border border-cyan-300/20 bg-slate-900 px-2 text-xs text-slate-100 outline-none focus:border-cyan-300/60"
+        className="input-dark mt-0.5 w-full"
         value={value}
         min={min}
         step={step}

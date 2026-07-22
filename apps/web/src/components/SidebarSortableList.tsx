@@ -53,7 +53,7 @@ export function SidebarSortableList({ mode, order, onOrderChange, renderCard }: 
       {displayOrder.map((id) => (
         <div
           key={id}
-          className={`${dragId === id ? "opacity-45" : ""} ${overId === id && dragId !== id ? "rounded-xl ring-1 ring-cyan-400/70" : ""}`}
+          className={`${dragId === id ? "opacity-45" : ""} ${overId === id && dragId !== id ? "border-t border-emerald-400/70" : ""}`}
           onDragOver={dragHandlers(id).onDragOver}
           onDrop={dragHandlers(id).onDrop}
         >

@@ -75,42 +75,42 @@ export function VideoPanel({ telemetry, telemetryStale = false, targetEstimation
 
   const style: CSSProperties = position
     ? { left: position.x, top: position.y }
-    : { right: 24, bottom: 24 };
+    : {};
 
   return (
-    <div className="absolute z-20 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2 sm:flex-row sm:items-end" style={style}>
+    <div className="video-console" style={style}>
       {showGroundTarget && (
-        <div className="w-full max-h-[min(50vh,420px)] shrink-0 overflow-y-auto rounded-xl border border-cyan-300/20 bg-slate-950/88 shadow-glow backdrop-blur sm:w-[300px] sm:max-h-[min(70vh,520px)]">
+        <div className="video-console__target">
           <GroundTargetPanel {...targetEstimation} />
         </div>
       )}
 
       <section
         data-tour="camera-feed"
-        className="w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-cyan-300/20 bg-slate-950/88 shadow-glow backdrop-blur"
+        className="video-console__feed"
       >
-        <header className="flex cursor-move items-center justify-between border-b border-line px-3 py-2" onPointerDown={startDrag}>
+        <header className="video-console__header" onPointerDown={startDrag}>
           <div>
-            <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-200">Camera Feed</div>
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <span>{kind.toUpperCase()}</span>
+            <div className="panel-kicker">Payload / EO</div>
+            <div className="mt-0.5 flex items-center gap-2 font-mono text-[9px] text-slate-500">
+              <span>{kind.toUpperCase()}</span><span>·</span>
               <VideoSignalBadge status={videoSignal.status} />
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <button
               type="button"
-              className={`rounded border px-2 py-1 text-xs transition ${
+              className={`operator-button h-6 px-2 ${
                 showHud
-                  ? "border-cyan-300/40 bg-cyan-500/15 text-cyan-100"
-                  : "border-white/10 text-slate-300 hover:border-cyan-300/40"
+                  ? "border-emerald-400/40 text-emerald-200"
+                  : ""
               }`}
               aria-pressed={showHud}
               onClick={() => setShowHud((value) => !value)}
             >
               HUD
             </button>
-            <button className="rounded border border-white/10 px-2 py-1 text-xs text-slate-300 hover:border-cyan-300/40" onClick={() => setCollapsed((value) => !value)}>
+            <button className="operator-button h-6 px-2" onClick={() => setCollapsed((value) => !value)}>
               {collapsed ? "Open" : "Hide"}
             </button>
           </div>
@@ -118,16 +118,16 @@ export function VideoPanel({ telemetry, telemetryStale = false, targetEstimation
 
         {!collapsed && (
           <>
-            <div className="relative h-[220px] bg-black">
+            <div className="video-console__viewport">
               {url ? (
                 <VideoContent url={url} kind={kind} signal={videoSignal} />
               ) : (
                 <div className="flex h-full items-center justify-center text-sm text-slate-500">No video source configured</div>
               )}
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="h-10 w-10 rounded-full border border-cyan-200/70" />
-                <div className="absolute h-12 w-px bg-cyan-200/70" />
-                <div className="absolute h-px w-12 bg-cyan-200/70" />
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-emerald-200/65">
+                <div className="h-9 w-9 border border-current" />
+                <div className="absolute h-12 w-px bg-current" />
+                <div className="absolute h-px w-12 bg-current" />
               </div>
               {showHud && (
                 <div className="pointer-events-none absolute left-1 top-1 z-10 scale-[0.72] origin-top-left opacity-90 sm:scale-[0.78]">
@@ -135,7 +135,7 @@ export function VideoPanel({ telemetry, telemetryStale = false, targetEstimation
                 </div>
               )}
             </div>
-            <div className="grid grid-cols-[90px_1fr] gap-2 border-t border-line p-2">
+            <div className="grid grid-cols-[78px_1fr] gap-1 border-t border-white/10 p-1.5">
               <select className="input-dark" value={kind} onChange={(event) => setKind(event.target.value as VideoKind)}>
                 <option value="mjpeg">MJPEG</option>
                 <option value="hls">HLS</option>

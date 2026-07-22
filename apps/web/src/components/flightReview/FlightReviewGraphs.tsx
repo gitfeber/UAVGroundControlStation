@@ -20,7 +20,7 @@ function ReviewGraph({
   currentTimeMs,
   durationMs,
   onSeek,
-  color = "#22d3ee"
+  color = "#78aa8d"
 }: GraphProps & {
   secondary?: { label: string; unit: string; points: { timeMs: number; value: number }[]; color?: string };
 }) {
@@ -115,10 +115,10 @@ export function FlightReviewGraphs({
   );
 
   return (
-    <div className="grid shrink-0 grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+    <div className="grid shrink-0 grid-cols-1 gap-px md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
       <ReviewGraph label="Altitude" unit="m" points={series.altitude} currentTimeMs={currentTimeMs} durationMs={durationMs} onSeek={onSeek} />
-      <ReviewGraph label="Speed" unit="m/s" points={series.speed} currentTimeMs={currentTimeMs} durationMs={durationMs} onSeek={onSeek} color="#a855f7" />
-      <ReviewGraph label="Battery" unit="V" points={series.batteryVoltage} currentTimeMs={currentTimeMs} durationMs={durationMs} onSeek={onSeek} color="#22c55e" />
+      <ReviewGraph label="Speed" unit="m/s" points={series.speed} currentTimeMs={currentTimeMs} durationMs={durationMs} onSeek={onSeek} color="#91a4ae" />
+      <ReviewGraph label="Battery" unit="V" points={series.batteryVoltage} currentTimeMs={currentTimeMs} durationMs={durationMs} onSeek={onSeek} color="#78aa8d" />
       <ReviewGraph
         label="Link / RSSI"
         unit="mixed"
@@ -129,7 +129,7 @@ export function FlightReviewGraphs({
         onSeek={onSeek}
         color="#fbbf24"
       />
-      <ReviewGraph label="GPS quality" unit="score" points={gpsQuality} currentTimeMs={currentTimeMs} durationMs={durationMs} onSeek={onSeek} color="#38bdf8" />
+      <ReviewGraph label="GPS quality" unit="score" points={gpsQuality} currentTimeMs={currentTimeMs} durationMs={durationMs} onSeek={onSeek} color="#839e91" />
     </div>
   );
 }

@@ -253,11 +253,11 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, telemetryS
 
     const staleOpacity = telemetryStale ? 0.45 : 1;
     map.setPaintProperty("drone-point", "circle-opacity", staleOpacity);
-    map.setPaintProperty("drone-point", "circle-color", telemetryStale ? "#94a3b8" : "#22d3ee");
+    map.setPaintProperty("drone-point", "circle-color", telemetryStale ? "#687377" : "#78aa8d");
 
     if (map.getLayer("drone-heading")) {
       map.setPaintProperty("drone-heading", "icon-opacity", staleOpacity);
-      map.setPaintProperty("drone-heading", "icon-color", telemetryStale ? "#94a3b8" : "#22d3ee");
+      map.setPaintProperty("drone-heading", "icon-color", telemetryStale ? "#687377" : "#78aa8d");
     }
   }, [telemetryStale, mapReady, styleEpoch]);
 
@@ -293,8 +293,8 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, telemetryS
   }, [groundTarget, droneLngLat, mapReady, styleEpoch, telemetryStale]);
 
   return (
-    <main data-tour="map" className="relative min-w-0 flex-1">
-      <div ref={containerRef} className="h-full w-full bg-slate-950" />
+    <main data-tour="map" className="relative h-full min-w-0">
+      <div ref={containerRef} className="h-full w-full bg-[#080b0d]" />
 
       {basemapSwitcherEnabled && <MapBasemapSwitcher value={basemapId} onChange={handleBasemapChange} />}
 
@@ -310,12 +310,12 @@ export function MapPanel({ telemetry, coordinate, home, groundTarget, telemetryS
         onFitTrack={handleFitTrack}
       />
 
-      <div className="pointer-events-none absolute bottom-6 left-1/2 z-10 -translate-x-1/2">
+      <div className="pointer-events-none absolute bottom-14 left-1/2 z-10 -translate-x-1/2">
         <HudOverlay telemetry={telemetry} stale={telemetryStale} />
       </div>
 
       {!isControlled && (
-        <button data-tour="clear-track" className="btn-secondary absolute bottom-4 left-4" onClick={() => setTrack([])}>
+        <button data-tour="clear-track" className="operator-button absolute left-3 top-3 z-10" onClick={() => setTrack([])}>
           Clear Track
         </button>
       )}
@@ -331,9 +331,9 @@ function addMapOverlays(map: MapInstance): void {
       type: "line",
       source: "track",
       paint: {
-        "line-color": "#22d3ee",
-        "line-width": 3,
-        "line-opacity": 0.9
+        "line-color": "#78aa8d",
+        "line-width": 2,
+        "line-opacity": 0.85
       }
     });
   }
@@ -348,7 +348,7 @@ function addMapOverlays(map: MapInstance): void {
       filter: ["!", ["has", "heading"]],
       paint: {
         "circle-radius": 9,
-        "circle-color": "#22d3ee",
+        "circle-color": "#78aa8d",
         "circle-stroke-width": 2,
         "circle-stroke-color": "#0f172a"
       }
@@ -367,7 +367,7 @@ function addMapOverlays(map: MapInstance): void {
         "icon-ignore-placement": true
       },
       paint: {
-        "icon-color": "#22d3ee",
+        "icon-color": "#78aa8d",
         "icon-halo-color": "#0f172a",
         "icon-halo-width": 2
       }
