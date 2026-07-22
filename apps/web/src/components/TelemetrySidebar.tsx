@@ -46,21 +46,19 @@ export function TelemetrySidebar({
   return (
     <aside
       data-tour="telemetry-sidebar"
-      className={`z-10 flex w-[320px] shrink-0 flex-col gap-3 overflow-y-auto border-r border-cyan-300/10 bg-slate-950/78 p-3 backdrop-blur ${
-        telemetryStale ? "opacity-70 saturate-75" : ""
-      }`}
+      className={`telemetry-strip ${telemetryStale ? "saturate-75" : ""}`}
     >
       {telemetryStale && (
-        <div className="rounded border border-amber-400/40 bg-amber-950/40 px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-200">
-          Link stale — data may be outdated
+        <div className="telemetry-stale">
+          Telemetry stale — displayed values may be outdated
         </div>
       )}
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Telemetry</span>
+      <div className="telemetry-strip__header">
+        <span className="panel-kicker">Aircraft state</span>
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            className="rounded-lg border border-cyan-300/20 bg-slate-900/80 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-slate-500 transition hover:border-cyan-300/40 hover:text-cyan-100"
+            className="operator-button h-[22px] px-2 text-[8px]"
             title="Reset card order to recommended flight priority"
             aria-label="Reset card order to recommended flight priority"
             onClick={() => setCardOrder(defaultSidebarOrder())}
@@ -71,41 +69,46 @@ export function TelemetrySidebar({
         </div>
       </div>
 
-      <div data-tour="preflight-health">
-        <PreflightHealthCard health={preflight} />
-      </div>
+      <div className="telemetry-strip__scroll">
+        <div data-tour="preflight-health">
+          <PreflightHealthCard health={preflight} />
+        </div>
 
-      <div data-tour="alerts">
-        <Panel title="Alerts">
-          {alerts.length === 0 ? (
-            <div className="text-sm text-emerald-200">No active alerts</div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {alerts.map((alert) => (
-                <Badge key={alert.label} tone={alert.level === "critical" ? "bad" : "warn"}>
-                  {alert.label}
-                </Badge>
-              ))}
-            </div>
-          )}
-        </Panel>
-      </div>
+        <div data-tour="alerts">
+          <Panel title="Active alerts">
+            {alerts.length === 0 ? (
+              <div className="instrument-value">
+                <span className="instrument-value__label">Aircraft advisories</span>
+                <span className="instrument-value__data instrument-value__data--good">NONE</span>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {alerts.map((alert) => (
+                  <Badge key={alert.label} tone={alert.level === "critical" ? "bad" : "warn"}>
+                    {alert.label}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </Panel>
+        </div>
 
-      {view === "instruments" ? (
-        <TelemetryInstruments
-          telemetry={telemetry}
-          distanceFromHome={distanceFromHome}
-          order={cardOrder}
-          onOrderChange={setCardOrder}
-        />
-      ) : (
-        <SidebarSortableList
-          mode="text"
-          order={cardOrder}
-          onOrderChange={setCardOrder}
-          renderCard={(id, drag) => renderTextCard(id, { telemetry, distanceFromHome, batteryPercent, sensorSummary }, drag)}
-        />
-      )}
+        {view === "instruments" ? (
+          <TelemetryInstruments
+            telemetry={telemetry}
+            distanceFromHome={distanceFromHome}
+            order={cardOrder}
+            onOrderChange={setCardOrder}
+          />
+        ) : (
+          <SidebarSortableList
+            mode="text"
+            order={cardOrder}
+            onOrderChange={setCardOrder}
+            renderCard={(id, drag) => renderTextCard(id, { telemetry, distanceFromHome, batteryPercent, sensorSummary }, drag)}
+          />
+        )}
+      </div>
     </aside>
   );
 }
@@ -166,7 +169,7 @@ function renderTextCard(id: SidebarCardId, ctx: TextRenderContext, drag: Sidebar
             <Metric label="Home Dist." value={formatNumber(distanceFromHome, 0, "m")} />
             <Metric label="MSL Alt" value={formatNumber(telemetry.position.altMsl, 1, "m")} />
           </div>
-          <div className="mt-2 rounded-lg border border-white/5 bg-black/20 p-2 font-mono text-[11px] text-slate-300">
+          <div className="mt-2 border border-white/5 bg-black/20 p-2 font-mono text-[11px] text-slate-300">
             {formatNumber(telemetry.position.lat, 7)}, {formatNumber(telemetry.position.lon, 7)}
           </div>
         </Panel>
@@ -179,7 +182,7 @@ function renderTextCard(id: SidebarCardId, ctx: TextRenderContext, drag: Sidebar
               <span>Battery</span>
               <span className="font-mono">{formatInteger(batteryPercent, "%")}</span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+            <div className="h-1 overflow-hidden bg-slate-800">
               <div
                 className={`h-full ${percentageColor(batteryPercent)}`}
                 style={{ width: `${Math.max(0, Math.min(100, batteryPercent ?? 0))}%` }}
@@ -264,10 +267,9 @@ function renderTextCard(id: SidebarCardId, ctx: TextRenderContext, drag: Sidebar
 
 function SidebarViewToggle({ view, onChange }: { view: SidebarView; onChange: (view: SidebarView) => void }) {
   return (
-    <div data-tour="sidebar-view-toggle" className="flex rounded-lg border border-cyan-300/20 bg-slate-900/80 p-0.5 font-mono text-[10px]">
+    <div data-tour="sidebar-view-toggle" className="sidebar-view-switch">
       <button
         type="button"
-        className={toggleClass(view === "text")}
         onClick={() => onChange("text")}
         aria-pressed={view === "text"}
       >
@@ -275,7 +277,6 @@ function SidebarViewToggle({ view, onChange }: { view: SidebarView; onChange: (v
       </button>
       <button
         type="button"
-        className={toggleClass(view === "instruments")}
         onClick={() => onChange("instruments")}
         aria-pressed={view === "instruments"}
       >
@@ -283,12 +284,6 @@ function SidebarViewToggle({ view, onChange }: { view: SidebarView; onChange: (v
       </button>
     </div>
   );
-}
-
-function toggleClass(active: boolean): string {
-  return `rounded-md px-2 py-1 uppercase tracking-wider transition ${
-    active ? "bg-cyan-500/20 text-cyan-100" : "text-slate-500 hover:text-slate-300"
-  }`;
 }
 
 function readSidebarView(): SidebarView {

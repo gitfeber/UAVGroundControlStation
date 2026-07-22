@@ -21,7 +21,7 @@ import { getRemoteSerialControlApiBanner } from "./lib/apiSafety";
 import { resolveLinkIssues } from "./lib/linkErrors";
 import { webSerialUnsupportedReason } from "./link/webSerialSupport";
 
-const ENABLE_SPLASH_SCREEN = import.meta.env.VITE_ENABLE_SPLASH_SCREEN !== "false";
+const ENABLE_SPLASH_SCREEN = import.meta.env.VITE_ENABLE_SPLASH_SCREEN === "true";
 
 export function App() {
   const [showSplash, setShowSplash] = useState(ENABLE_SPLASH_SCREEN);
@@ -38,12 +38,15 @@ export function App() {
     linkConnection,
     wsConnected,
     runtimeMode,
+    browserSessionExportEnabled,
+    sessionSnapshot,
     refreshPorts,
     connect,
     disconnect,
     resetSession,
     startLogging,
     stopLogging,
+    downloadSession,
     clearLogs,
     activeSourceMode,
     setSourceMode,
@@ -148,7 +151,7 @@ export function App() {
 
   return (
     <>
-      <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
+      <div className={`operator-console source-mode-${activeSourceMode}`}>
         <Topbar
           ports={ports}
           status={status}
@@ -170,6 +173,9 @@ export function App() {
           onReset={resetAll}
           onStartLogging={startLogging}
           onStopLogging={stopLogging}
+          onDownloadSession={downloadSession}
+          sessionExportEnabled={browserSessionExportEnabled}
+          sessionEventCount={sessionSnapshot.eventCount}
           onRestartTour={() => setTourRestartToken((token) => token + 1)}
           linkIssues={linkIssues}
         />
@@ -184,7 +190,7 @@ export function App() {
           <>
             {activeSourceMode !== "live" && <NonLiveBanner mode={activeSourceMode} />}
 
-            <div className={`relative flex min-h-0 flex-1 ${dashboardTint(activeSourceMode)}`}>
+            <div className="operator-workspace">
               <TelemetrySidebar
                 telemetry={telemetry}
                 distanceFromHome={distanceFromHome}
@@ -192,36 +198,36 @@ export function App() {
                 preflight={preflight}
                 telemetryStale={telemetryStale}
               />
-              <ErrorBoundary>
-                <MapPanel
-                  telemetry={telemetry}
-                  coordinate={coordinate}
-                  home={home}
-                  groundTarget={targetEstimation.estimate}
-                  telemetryStale={telemetryStale}
-                  trackMode={isControlledTrack ? "controlled" : "internal"}
-                  controlledTrack={replay.replayTrack}
-                />
-              </ErrorBoundary>
-              <ActivityLogPanel logs={logs} messages={status.mavlinkMessages ?? []} onClear={clearLogs} linkIssues={linkIssues} />
-              <VideoPanel telemetry={telemetry} telemetryStale={telemetryStale} targetEstimation={targetEstimation} />
+              <div className="operator-map-stage">
+                <ErrorBoundary>
+                  <MapPanel
+                    telemetry={telemetry}
+                    coordinate={coordinate}
+                    home={home}
+                    groundTarget={targetEstimation.estimate}
+                    telemetryStale={telemetryStale}
+                    trackMode={isControlledTrack ? "controlled" : "internal"}
+                    controlledTrack={replay.replayTrack}
+                  />
+                </ErrorBoundary>
+                <VideoPanel telemetry={telemetry} telemetryStale={telemetryStale} targetEstimation={targetEstimation} />
 
-              {activeSourceMode !== "live" && (
-                <div className="absolute right-4 top-4 z-20">
+                {activeSourceMode !== "live" && (
                   <ReplaySimPanel
                     mode={activeSourceMode}
                     replay={replay}
                     canOpenFlightReview={canOpenFlightReview}
                     onOpenFlightReview={openFlightReview}
                   />
-                </div>
-              )}
+                )}
 
-              {error && (
-                <div className="absolute left-1/2 top-4 z-30 -translate-x-1/2 rounded-lg border border-red-400/30 bg-red-950/90 px-4 py-2 text-sm text-red-100 shadow-glow">
-                  {error}
-                </div>
-              )}
+                {error && (
+                  <div className="operator-popover absolute left-1/2 top-3 z-40 -translate-x-1/2 border-red-400/40 px-4 py-2 text-xs text-red-200">
+                    {error}
+                  </div>
+                )}
+              </div>
+              <ActivityLogPanel logs={logs} messages={status.mavlinkMessages ?? []} onClear={clearLogs} linkIssues={linkIssues} />
             </div>
           </>
         )}
@@ -255,26 +261,20 @@ function RemoteSerialControlApiBanner({ message }: { message: string }) {
   );
 }
 
-function dashboardTint(mode: "live" | "replay" | "simulation"): string {
-  if (mode === "replay") return "ring-2 ring-inset ring-amber-400/30";
-  if (mode === "simulation") return "ring-2 ring-inset ring-purple-400/30";
-  return "";
-}
-
 function NonLiveBanner({ mode }: { mode: "replay" | "simulation" }) {
   const config =
     mode === "replay"
       ? {
           text: "REPLAY MODE — displaying recorded telemetry, not live vehicle data",
-          className: "border-amber-400/40 bg-amber-400/10 text-amber-100"
+          className: "border-amber-400/40 bg-amber-400/10 text-amber-200"
         }
       : {
           text: "SIMULATION MODE — displaying synthetic telemetry, not live vehicle data",
-          className: "border-purple-400/40 bg-purple-400/10 text-purple-100"
+          className: "border-slate-400/40 bg-slate-400/10 text-slate-300"
         };
 
   return (
-    <div className={`shrink-0 border-b px-4 py-1.5 text-center text-xs font-semibold uppercase tracking-[0.18em] ${config.className}`}>
+    <div className={`operator-notice ${config.className}`}>
       {config.text}
     </div>
   );
