@@ -481,8 +481,20 @@ fn validate_target_log_path(path: &str) -> Result<(), String> {
     if trimmed.is_empty() {
         return Err("target log path is empty".to_string());
     }
-    if trimmed.contains("..") {
+    if trimmed.contains("..") || trimmed.contains('\0') {
         return Err("target log path is not allowed".to_string());
+    }
+    for forbidden_prefix in [
+        "/etc/", "/usr/", "/bin/", "/sbin/", "/lib/", "/lib64/", "/boot/", "/proc/", "/sys/", "/dev/", "/var/", "/root/",
+    ] {
+        if trimmed.starts_with(forbidden_prefix) {
+            return Err("target log path is in a protected system directory".to_string());
+        }
+    }
+    if let Ok(meta) = std::fs::symlink_metadata(trimmed) {
+        if meta.file_type().is_symlink() {
+            return Err("target log path must not be a symlink".to_string());
+        }
     }
     let lower = trimmed.to_lowercase();
     if !lower.ends_with(".json") && !lower.ends_with(".csv") {
@@ -806,6 +818,24 @@ fn is_supported_mavlink_message(message_id: u32) -> bool {
     )
 }
 
+fn mavlink_base_payload_len(message_id: u32) -> usize {
+    match message_id {
+        0 => 9,
+        1 => 31,
+        24 => 30,
+        30 => 28,
+        33 => 28,
+        62 => 26,
+        65 => 42,
+        74 => 20,
+        109 => 9,
+        147 => 36,
+        253 => 51,
+        285 => 32,
+        _ => 0,
+    }
+}
+
 fn apply_frame(worker_state: &WorkerState, frame: MavlinkFrame) -> Result<(), String> {
     if !is_supported_mavlink_message(frame.message_id) {
         return Ok(());
@@ -818,20 +848,33 @@ fn apply_frame(worker_state: &WorkerState, frame: MavlinkFrame) -> Result<(), St
         telemetry.vehicle.r#type = "ArduPilot".to_string();
     }
 
+    // MAVLink v2 truncates trailing zero bytes on the wire; zero-pad back to the
+    // canonical base payload length before fixed-length decoders read fields.
+    let min_len = mavlink_base_payload_len(frame.message_id);
+    let mut padded_storage: Vec<u8>;
+    let payload: &[u8] = if frame.payload.len() < min_len {
+        padded_storage = Vec::with_capacity(min_len);
+        padded_storage.extend_from_slice(&frame.payload);
+        padded_storage.resize(min_len, 0);
+        &padded_storage
+    } else {
+        &frame.payload
+    };
+
     match frame.message_id {
-        0 => update_heartbeat(&mut telemetry, &frame.payload),
-        1 => update_sys_status(&mut telemetry, &frame.payload),
-        24 => update_gps_raw_int(&mut telemetry, &frame.payload),
-        30 => update_attitude(&mut telemetry, &frame.payload),
-        265 => update_gimbal_legacy(&mut telemetry, &frame.payload),
-        285 => update_gimbal_device_attitude_status(&mut telemetry, &frame.payload),
-        33 => update_global_position_int(&mut telemetry, &frame.payload),
-        62 => update_nav_controller_output(&mut telemetry, &frame.payload),
-        65 => update_rc_channels(&mut telemetry, &frame.payload),
-        74 => update_vfr_hud(&mut telemetry, &frame.payload),
-        109 => update_radio_status(&mut telemetry, &frame.payload),
-        147 => update_battery_status(&mut telemetry, &frame.payload),
-        253 => update_status_text(&mut telemetry, &frame.payload),
+        0 => update_heartbeat(&mut telemetry, payload),
+        1 => update_sys_status(&mut telemetry, payload),
+        24 => update_gps_raw_int(&mut telemetry, payload),
+        30 => update_attitude(&mut telemetry, payload),
+        265 => update_gimbal_legacy(&mut telemetry, payload),
+        285 => update_gimbal_device_attitude_status(&mut telemetry, payload),
+        33 => update_global_position_int(&mut telemetry, payload),
+        62 => update_nav_controller_output(&mut telemetry, payload),
+        65 => update_rc_channels(&mut telemetry, payload),
+        74 => update_vfr_hud(&mut telemetry, payload),
+        109 => update_radio_status(&mut telemetry, payload),
+        147 => update_battery_status(&mut telemetry, payload),
+        253 => update_status_text(&mut telemetry, payload),
         _ => {}
     }
 
