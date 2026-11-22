@@ -491,6 +491,13 @@ fn validate_target_log_path(path: &str) -> Result<(), String> {
             return Err("target log path is in a protected system directory".to_string());
         }
     }
+    for component in std::path::Path::new(trimmed).components() {
+        if let std::path::Component::Normal(part) = component {
+            if part.to_string_lossy().starts_with('.') {
+                return Err("target log path must not contain hidden dot-directories or dotfiles".to_string());
+            }
+        }
+    }
     if let Ok(meta) = std::fs::symlink_metadata(trimmed) {
         if meta.file_type().is_symlink() {
             return Err("target log path must not be a symlink".to_string());

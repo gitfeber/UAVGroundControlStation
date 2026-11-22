@@ -5,6 +5,7 @@
 
 const CRSF_SYNC_BYTES = [0xc8, 0xea, 0xec, 0xee, 0xef] as const;
 const CRSF_MAX_FRAME_LEN = 64;
+const CRSF_MAX_BUFFER_LEN = 4096;
 
 export interface CrsfFrame {
   frameType: number;
@@ -57,7 +58,11 @@ export class CrsfFramer {
       pos += totalLen;
     }
 
-    this.buffer = pos >= buf.byteLength ? EMPTY : buf.subarray(pos);
+    let remaining = pos >= buf.byteLength ? EMPTY : buf.subarray(pos);
+    if (remaining.byteLength > CRSF_MAX_BUFFER_LEN) {
+      remaining = remaining.subarray(remaining.byteLength - CRSF_MAX_BUFFER_LEN);
+    }
+    this.buffer = remaining;
     return frames;
   }
 }
