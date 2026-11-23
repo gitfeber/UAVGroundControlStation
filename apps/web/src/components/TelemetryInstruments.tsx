@@ -49,7 +49,7 @@ function renderInstrumentCard(id: SidebarCardId, ctx: InstrumentRenderContext, d
           <div className="flex w-full flex-col gap-2">
             <div className="flex items-center justify-between gap-2">
               <span
-                className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                className={`status-tag ${
                   vehicle.armed
                     ? "border-red-400/40 bg-red-500/15 text-red-200"
                     : "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
@@ -57,7 +57,7 @@ function renderInstrumentCard(id: SidebarCardId, ctx: InstrumentRenderContext, d
               >
                 {vehicle.armed ? "Armed" : "Safe"}
               </span>
-              <span className="truncate font-mono text-xs text-cyan-100">{vehicle.flightMode || "--"}</span>
+              <span className="truncate font-mono text-xs text-slate-200">{vehicle.flightMode || "--"}</span>
             </div>
             <ChipRow>
               <Chip label="Type" value={vehicle.type || "--"} />
@@ -133,17 +133,17 @@ function InstrumentCard({
   drag?: SidebarDragHandlers;
 }) {
   return (
-    <section className="rounded-xl border border-line bg-panel/90 shadow-glow">
+    <section className="operator-panel">
       <header
-        className={`flex items-center gap-2 border-b border-line px-2.5 py-1.5 ${sortable ? "cursor-grab active:cursor-grabbing" : ""}`}
+        className="operator-panel__header justify-start"
         draggable={sortable}
         onDragStart={drag?.onDragStart}
         onDragEnd={drag?.onDragEnd}
       >
-        {sortable && <span className="select-none text-slate-600" aria-hidden="true">⠿</span>}
-        <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-200/90">{title}</h3>
+        {sortable && <span className="select-none text-slate-700" aria-hidden="true">⋮⋮</span>}
+        <h3 className="operator-panel__title">{title}</h3>
       </header>
-      <div className="w-full p-2">{children}</div>
+      <div className="operator-panel__body w-full">{children}</div>
     </section>
   );
 }
@@ -172,7 +172,7 @@ function Chip({
 
   return (
     <div
-      className={`min-w-0 rounded border border-white/5 bg-black/25 px-1.5 py-1 ${wide ? "w-full" : "flex-1 basis-[calc(50%-0.25rem)]"}`}
+      className={`min-w-0 border-b border-white/5 px-1 py-1 ${wide ? "w-full" : "flex-1 basis-[calc(50%-0.25rem)]"}`}
     >
       <div className="text-[8px] uppercase tracking-wider text-slate-500">{label}</div>
       <div className={`truncate font-mono text-[10px] font-semibold ${valueTone}`}>{value}</div>
@@ -239,8 +239,8 @@ function CompassRose({
           </text>
         ) : (
           <g transform={`rotate(${headingDeg}, ${cx}, ${cy})`}>
-            <polygon points={`${cx},${cy - r + 12} ${cx - 5},${cy - r + 26} ${cx + 5},${cy - r + 26}`} fill="#22d3ee" />
-            <line x1={cx} y1={cy} x2={cx} y2={cy - r + 6} stroke="#22d3ee" strokeWidth={2} />
+            <polygon points={`${cx},${cy - r + 12} ${cx - 5},${cy - r + 26} ${cx + 5},${cy - r + 26}`} fill="#78aa8d" />
+            <line x1={cx} y1={cy} x2={cx} y2={cy - r + 6} stroke="#78aa8d" strokeWidth={2} />
           </g>
         )}
         {groundCourseDeg !== null && Number.isFinite(groundCourseDeg) && (
@@ -267,7 +267,7 @@ function GpsInstrument({
   return (
     <div className="flex w-full flex-col gap-2">
       <div
-        className={`rounded-lg border px-2 py-2 text-center ${
+        className={`border px-2 py-2 text-center ${
           fixType >= 3
             ? "border-emerald-400/35 bg-emerald-500/10"
             : fixType >= 2
@@ -345,7 +345,7 @@ function MotionTapesInstrument({
 function TapeColumn({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
-      <span className="text-[8px] font-semibold uppercase tracking-[0.16em] text-cyan-300/80">{title}</span>
+      <span className="text-[8px] font-semibold uppercase tracking-[0.16em] text-slate-500">{title}</span>
       {children}
     </div>
   );
@@ -394,7 +394,7 @@ function BatteryGauge({ telemetry }: { telemetry: TelemetryState }) {
         </svg>
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+        <div className="h-1 w-full overflow-hidden bg-slate-800">
           <div className={`h-full ${percentageColor(percent)}`} style={{ width: `${fill}%` }} />
         </div>
         <div className="grid grid-cols-3 gap-1">
@@ -435,9 +435,9 @@ function SystemInstrument({ telemetry, sensorSummary }: { telemetry: TelemetrySt
     <div className="flex w-full flex-col gap-2">
       <div className="flex w-full items-center gap-2">
         <span className="w-10 text-[9px] uppercase text-slate-500">Load</span>
-        <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-800">
+        <div className="h-1 min-w-0 flex-1 overflow-hidden bg-slate-800">
           <div
-            className={`h-full ${loadPct !== null ? (loadPct > 80 ? "bg-red-500" : loadPct > 50 ? "bg-yellow-300" : "bg-cyan-400") : "bg-slate-700"}`}
+            className={`h-full ${loadPct !== null ? (loadPct > 80 ? "bg-red-500" : loadPct > 50 ? "bg-yellow-300" : "bg-emerald-500") : "bg-slate-700"}`}
             style={{ width: `${loadPct ?? 0}%` }}
           />
         </div>
@@ -501,8 +501,8 @@ function SessionBar({
         <span className="text-slate-500">{label}</span>
         <span className="text-slate-300">{formatNumber(value, unit === "m" && max >= 1000 ? 0 : 1, ` ${unit}`)}</span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
-        <div className="h-full bg-cyan-500/70" style={{ width: hasValue ? `${pct}%` : "0%" }} />
+      <div className="h-1 overflow-hidden bg-slate-800">
+        <div className="h-full bg-emerald-500/70" style={{ width: hasValue ? `${pct}%` : "0%" }} />
       </div>
     </div>
   );
@@ -533,7 +533,7 @@ function HorizontalSignalBar({
   return (
     <div className="flex w-full items-center gap-2">
       <span className="w-9 shrink-0 text-[9px] uppercase tracking-wide text-slate-500">{label}</span>
-      <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-800">
+      <div className="h-1 min-w-0 flex-1 overflow-hidden bg-slate-800">
         <div className={`h-full ${hasValue ? barClass : "bg-slate-700"}`} style={{ width: hasValue ? `${pct}%` : "0%" }} />
       </div>
       <span className="w-8 shrink-0 text-right font-mono text-[10px] text-slate-200">{formatInteger(value)}</span>
@@ -604,7 +604,7 @@ function VerticalTape({
           })}
         <polygon
           points={`${width / 2 - 4},${height / 2} ${width / 2 + 4},${height / 2} ${width / 2},${height / 2 - 5}`}
-          fill="#22d3ee"
+          fill="#78aa8d"
         />
       </svg>
       <div
@@ -658,7 +658,7 @@ function AttitudeBall({
           </>
         )}
       </g>
-      <circle cx={cx} cy={cy} r={2} fill="#22d3ee" />
+      <circle cx={cx} cy={cy} r={2} fill="#78aa8d" />
     </svg>
   );
 }

@@ -54,6 +54,7 @@ Prefer bench testing and disconnected telemetry validation before using the soft
 
 ## Features
 
+- **Map-first operator console** — compact source/link command bar, avionics-style telemetry strip, contextual payload panel, and expandable bottom diagnostics; nominal state remains visually quiet while stale, warning, armed, and non-live states stay explicit
 - **Live map** with flight track (up to 5000 points), home reference, distance, **heading-aligned drone chevron** (falls back to a circle when heading is unknown), bottom-center **Attitude HUD** (pitch ladder, roll arc, heading tape, speed/altitude, climb bar, armed/mode; dims with a **Stale** banner when live telemetry is older than 3 s), **map navigation toolbar** (Follow with heading-up/north-up, Recenter, Fit track; preferences in `uav-gcs.map.follow` / `uav-gcs.map.headingUp`), and in-app **basemap switcher** (Tactical / Satellite / Topo; persisted in `localStorage` as `uav-gcs.map.basemap`)
 - **Telemetry sidebar** — **Text** or **Inst** (mini gauges with the same telemetry fields as text mode); drag card headers (⠿) to reorder (shared order for both views, stored in `uav-gcs.sidebar.order`); **Reset** restores recommended flight-priority order; alerts stay fixed at the top
 - **Serial link** — port picker (USB/PNP preferred), manual path entry, common baud rates
@@ -284,7 +285,7 @@ On the **desktop** link, gimbal attitude for estimation comes from MAVLink **285
 | `VITE_MAP_STYLE_URL` | Optional: full MapLibre style URL (hides the in-app basemap switcher) |
 | `VITE_SATELLITE_TILE_URL` | Optional: custom raster tile URL for the **Satellite** preset (default: Esri World Imagery) |
 | `VITE_VIDEO_URL` / `VITE_VIDEO_KIND` | Optional: camera stream (e.g. MJPEG). Compact attitude HUD on the feed is toggled with **HUD** in the camera header (`uav-gcs.video.hud`). |
-| `VITE_ENABLE_SPLASH_SCREEN` | Startup HUD splash overlay (default: enabled; set `false` to skip) |
+| `VITE_ENABLE_SPLASH_SCREEN` | Optional startup overlay (default: disabled; set `true` to enable) |
 
 Server: `PORT` (default `3001`), `HOST` (default `127.0.0.1`) in `apps/server`. The server exposes **unauthenticated** serial-control endpoints; it binds loopback only. Setting `HOST` to a routable address (e.g. `0.0.0.0`) is a deliberate opt-in that lets any device on the network open or close the link to flight hardware — see [`docs/adr/0002-server-loopback-only.md`](docs/adr/0002-server-loopback-only.md). On startup the server prints a prominent `console.warn` when bound beyond loopback; the browser stack shows a matching top banner when `VITE_API_BASE_URL` or `VITE_WS_URL` targets a non-loopback host. State-changing routes (`POST /api/connect`, `/api/disconnect`, `/api/reset`, logging start/stop) reject browser requests whose `Origin` is not the local Vite dev UI (`http://localhost:5173` or `http://127.0.0.1:5173`); non-browser clients that omit `Origin` are unchanged. `POST /api/connect` validates serial `path` against plausible device patterns only (Windows `COM*`, macOS `/dev/cu.*`/`/dev/tty.*`, Linux `tty*`, `/dev/serial/by-id|by-path/*`, `/dev/rfcomm*`) and `baudRate` (57600, 115200, 420000, 460800) before opening the port; malformed requests return HTTP 400. CI runs `cargo audit` on the desktop crate (`pnpm audit:desktop`).
 

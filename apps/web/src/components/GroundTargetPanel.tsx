@@ -65,7 +65,7 @@ export function GroundTargetPanel({
         <Metric label="Terrain Elev" value={formatNumber(estimate?.terrainElevationM, 1, " m")} tone={metricTone(estimate)} />
       </div>
 
-      <div className="mt-3 space-y-2 border-t border-line pt-3">
+      <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
         <label className="block text-[10px] uppercase tracking-[0.16em] text-slate-500">Video latency (ms)</label>
         <input
           className="input-dark w-full"
@@ -298,18 +298,18 @@ export function GroundTargetPanel({
               </button>
             </div>
             {terrainMetadata && (
-              <div className="rounded-lg border border-white/5 bg-black/20 p-2 font-mono text-[10px] text-slate-400">
+              <div className="border border-white/5 bg-black/20 p-2 font-mono text-[10px] text-slate-400">
                 {terrainMetadata.horizontalCrs} · {terrainMetadata.verticalDatum} · {formatNumber(terrainMetadata.resolutionM, 1, " m")}
               </div>
             )}
           </div>
         ) : (
-          <div className="rounded-lg border border-cyan-300/10 bg-cyan-400/5 p-2 text-[11px] text-cyan-100/80">
+          <div className="border border-emerald-300/10 bg-emerald-400/5 p-2 text-[11px] text-emerald-100/80">
             Browser dev uses synthetic flat terrain only. Load a real DEM in the desktop app.
           </div>
         )}
 
-        <div className="space-y-2 border-t border-line pt-3">
+        <div className="space-y-2 border-t border-white/10 pt-3">
           <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.16em] text-slate-500">
             <span>Target sample log</span>
             <span className="font-mono text-slate-400">
@@ -365,6 +365,6 @@ function metricTone(estimate: TargetEstimationController["estimate"]): "default"
   return "bad";
 }
 
-export function formatTargetReason(reason: TargetEstimateInvalidReason): string {
+function formatTargetReason(reason: TargetEstimateInvalidReason): string {
   return reason.replaceAll("_", " ");
 }

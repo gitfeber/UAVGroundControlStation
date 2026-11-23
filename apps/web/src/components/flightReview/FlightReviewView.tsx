@@ -27,12 +27,12 @@ export function FlightReviewView({ analysis, replay }: FlightReviewViewProps) {
   }, [replay.replayTelemetry.position?.lat, replay.replayTelemetry.position?.lon]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <div className="flight-review-console">
       <div className="shrink-0">
         <FlightReviewSummaryCards summary={analysis.summary} />
       </div>
 
-      <div className="grid min-h-[18rem] flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(14rem,18rem)_1fr]">
+      <div className="grid min-h-[18rem] flex-1 grid-cols-1 gap-px lg:grid-cols-[minmax(14rem,18rem)_1fr]">
         <FlightReviewFindingsPanel
           findings={analysis.findings}
           currentTimeMs={currentTimeMs}

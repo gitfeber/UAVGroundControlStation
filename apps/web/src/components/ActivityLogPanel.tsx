@@ -17,79 +17,63 @@ export function ActivityLogPanel({ logs, messages, onClear, linkIssues = [] }: A
   const headerMessage = primaryLinkIssue?.message ?? latestWarning?.message ?? logs[0]?.message ?? "No activity yet";
 
   return (
-    <section data-tour="activity-log" className="absolute bottom-4 left-[340px] z-20 w-[520px] overflow-hidden rounded-xl border border-cyan-300/20 bg-slate-950/90 shadow-glow backdrop-blur">
-      <header className="flex items-center justify-between border-b border-line px-3 py-2">
-        <button className="text-left" onClick={() => setOpen((value) => !value)}>
-          <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-200">Activity Log</div>
-          <div
-            className={`mt-0.5 max-w-[360px] truncate text-xs ${primaryLinkIssue ? "text-amber-200" : "text-slate-400"}`}
-          >
-            {headerMessage}
-          </div>
+    <section data-tour="activity-log" className="activity-dock">
+      <header className="activity-dock__header">
+        <button className="flex items-center gap-3 text-left" onClick={() => setOpen((value) => !value)}>
+          <span className="panel-kicker">Activity</span>
+          <span className="font-mono text-[9px] text-slate-500">{logs.length.toString().padStart(3, "0")} entries</span>
         </button>
-        <div className="flex items-center gap-2">
-          {linkIssues.length > 0 && (
-            <span className="rounded-full border border-amber-400/35 bg-amber-500/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-amber-200">
-              Link
-            </span>
-          )}
-          <span className="rounded-full border border-white/10 px-2 py-1 font-mono text-[11px] text-slate-300">{logs.length}</span>
-          {open && (
-            <button className="rounded border border-white/10 px-2 py-1 text-xs text-slate-300 hover:border-cyan-300/40" onClick={onClear}>
-              Clear
-            </button>
-          )}
-          <button className="rounded border border-white/10 px-2 py-1 text-xs text-slate-300 hover:border-cyan-300/40" onClick={() => setOpen((value) => !value)}>
-            {open ? "Hide" : "Open"}
+        <div className={`truncate font-mono text-[9px] ${primaryLinkIssue ? "text-amber-200" : "text-slate-400"}`}>
+          {headerMessage}
+        </div>
+        <div className="flex items-center gap-1">
+          {linkIssues.length > 0 && <span className="status-tag status-tag--warn">Link issue</span>}
+          {open && <button className="operator-button h-6" onClick={onClear}>Clear</button>}
+          <button className="operator-button h-6" onClick={() => setOpen((value) => !value)}>
+            {open ? "Collapse" : "Expand"}
           </button>
         </div>
       </header>
 
       {open && (
-        <div className="max-h-[320px] space-y-2 overflow-y-auto p-2">
+        <div className="activity-dock__body">
           {linkIssues.length > 0 && (
-            <div className="space-y-2 rounded-lg border border-amber-400/25 bg-amber-950/30 p-2">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-amber-200">Link issues</div>
+            <div className="border-b border-amber-400/25 bg-amber-950/20 px-3 py-2">
               {linkIssues.map((issue) => (
-                <div key={issue.id} className="rounded border border-white/5 bg-black/25 px-2 py-1.5 text-[11px] leading-snug text-amber-100">
-                  <div className="font-semibold uppercase tracking-[0.1em] text-amber-200/90">{issue.title}</div>
-                  <div className="mt-1 text-slate-200">{issue.message}</div>
+                <div key={issue.id} className="grid grid-cols-[120px_1fr] gap-3 py-1 text-[10px]">
+                  <strong className="uppercase tracking-[0.1em] text-amber-200">{issue.title}</strong>
+                  <span className="text-slate-300">{issue.message}</span>
                 </div>
               ))}
             </div>
           )}
 
-          <div className="rounded-lg border border-white/5 bg-black/25 p-2">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-[10px] uppercase tracking-[0.18em] text-cyan-200">Frame message stats</span>
-              <span className="font-mono text-[11px] text-slate-400">{messages.length} IDs</span>
-            </div>
-            {messages.length === 0 ? (
-              <div className="text-xs text-slate-500">No frame message IDs received yet.</div>
-            ) : (
-              <div className="grid grid-cols-2 gap-1">
-                {messages.map((message) => (
-                  <div key={message.id} className="rounded border border-white/5 bg-white/[0.03] px-2 py-1 font-mono text-[11px]">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-slate-300">{message.id} {message.label}</span>
-                      <span className="text-cyan-200">{message.count.toLocaleString()}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+          <div className="flex min-h-8 items-center gap-4 overflow-x-auto border-b border-white/8 px-3 py-1 font-mono text-[9px]">
+            <span className="panel-kicker shrink-0">Frame IDs</span>
+            {messages.length === 0 && <span className="text-slate-600">No parsed frame statistics</span>}
+            {messages.map((message) => (
+              <span key={message.id} className="shrink-0 text-slate-400">
+                {message.id}:{message.label} <strong className="text-slate-200">{message.count.toLocaleString()}</strong>
+              </span>
+            ))}
           </div>
 
           {logs.length === 0 ? (
-            <div className="px-2 py-4 text-center text-xs text-slate-500">No activity logged yet.</div>
+            <div className="px-3 py-6 text-center font-mono text-[10px] text-slate-600">No activity recorded</div>
           ) : (
-            logs.map((entry) => (
-              <div key={entry.id} className="grid grid-cols-[74px_74px_1fr] gap-2 rounded-lg border border-white/5 bg-black/25 px-2 py-1.5 font-mono text-[11px]">
-                <span className="text-slate-500">{new Date(entry.time).toLocaleTimeString()}</span>
-                <span className={levelClass(entry.level)}>{entry.level.toUpperCase()}</span>
-                <span className="text-slate-300">{entry.message}</span>
+            <div className="log-table">
+              <div className="log-table__header">
+                <span>Time</span><span>Level</span><span>Source</span><span>Message</span>
               </div>
-            ))
+              {logs.map((entry) => (
+                <div key={entry.id} className="log-table__row">
+                  <span className="text-slate-500">{new Date(entry.time).toLocaleTimeString([], { hour12: false })}</span>
+                  <span className={levelClass(entry.level)}>{entry.level.toUpperCase()}</span>
+                  <span className="text-slate-600">GCS</span>
+                  <span className="text-slate-300">{entry.message}</span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
@@ -101,5 +85,5 @@ function levelClass(level: ActivityLogEntry["level"]): string {
   if (level === "success") return "text-emerald-300";
   if (level === "warning") return "text-yellow-200";
   if (level === "error") return "text-red-300";
-  return "text-cyan-200";
+  return "text-slate-400";
 }

@@ -19,7 +19,7 @@ export function FlightReviewFindingsPanel({
 }) {
   return (
     <Panel title="Findings" className="flex h-full min-h-0 flex-col">
-      <div className="max-h-full space-y-1.5 overflow-y-auto">
+      <div className="max-h-full overflow-y-auto">
         {findings.length === 0 && (
           <p className="text-xs text-slate-500">No findings detected in this log.</p>
         )}
@@ -29,10 +29,10 @@ export function FlightReviewFindingsPanel({
             <button
               key={finding.id}
               type="button"
-              className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${
+              className={`w-full border-b px-2 py-2 text-left transition ${
                 active
-                  ? "border-cyan-300/40 bg-cyan-400/10"
-                  : "border-white/5 bg-black/20 hover:border-cyan-300/20"
+                  ? "border-emerald-400/40 bg-emerald-400/8"
+                  : "border-white/5 bg-transparent hover:bg-white/[0.025]"
               }`}
               onClick={() => onSeek(finding.timeMs)}
             >
