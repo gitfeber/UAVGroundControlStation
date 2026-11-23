@@ -68,9 +68,9 @@ export function HudOverlay({ telemetry, stale = false, compact = false, showTour
           cx={cx}
           cy={cy}
           r={radius}
-          fill="rgba(2,6,23,0.72)"
-          stroke="rgba(34,211,238,0.35)"
-          strokeWidth={1.5}
+          fill="rgba(8,11,13,0.84)"
+          stroke="rgba(184,200,205,0.28)"
+          strokeWidth={1}
         />
 
         <g clipPath={`url(#${clipId})`}>
@@ -145,11 +145,11 @@ export function HudOverlay({ telemetry, stale = false, compact = false, showTour
 
         <polygon
           points={`${cx},${cy - radius + 6} ${cx - 7},${cy - radius + 20} ${cx + 7},${cy - radius + 20}`}
-          fill="#22d3ee"
+          fill="#78aa8d"
         />
-        <circle cx={cx} cy={cy} r={4} fill="none" stroke="#22d3ee" strokeWidth={1.5} />
-        <line x1={cx - 18} y1={cy} x2={cx + 18} y2={cy} stroke="#22d3ee" strokeWidth={1.5} />
-        <line x1={cx} y1={cy - 18} x2={cx} y2={cy + 18} stroke="#22d3ee" strokeWidth={1.5} />
+        <circle cx={cx} cy={cy} r={4} fill="none" stroke="#78aa8d" strokeWidth={1.5} />
+        <line x1={cx - 18} y1={cy} x2={cx + 18} y2={cy} stroke="#78aa8d" strokeWidth={1.5} />
+        <line x1={cx} y1={cy - 18} x2={cx} y2={cy + 18} stroke="#78aa8d" strokeWidth={1.5} />
 
         <HeadingTape cx={cx} top={compact ? 10 : 14} width={size - 24} heading={heading} compact={compact} />
       </svg>
@@ -159,7 +159,7 @@ export function HudOverlay({ telemetry, stale = false, compact = false, showTour
         style={{ left: 0, right: 0, top: compact ? 52 : 72, height: compact ? 100 : 120 }}
       >
         <div className="flex flex-col justify-center text-left">
-          <div className="text-[9px] uppercase tracking-[0.18em] text-cyan-300/80">GS</div>
+          <div className="text-[9px] uppercase tracking-[0.18em] text-slate-400">GS</div>
           <div className={`text-lg font-bold ${groundSpeed === null ? "text-slate-500" : "text-slate-100"}`}>
             {formatNumber(groundSpeed, 1)}
           </div>
@@ -169,7 +169,7 @@ export function HudOverlay({ telemetry, stale = false, compact = false, showTour
         <ClimbBar fill={climbFill} height={compact ? 88 : 108} width={10} />
 
         <div className="flex flex-col items-end justify-center text-right">
-          <div className="text-[9px] uppercase tracking-[0.18em] text-cyan-300/80">
+          <div className="text-[9px] uppercase tracking-[0.18em] text-slate-400">
             {altitude.label ?? "ALT"}
           </div>
           <div className={`text-lg font-bold ${altitude.value === null ? "text-slate-500" : "text-slate-100"}`}>
@@ -185,12 +185,12 @@ export function HudOverlay({ telemetry, stale = false, compact = false, showTour
       >
         <span
           className={`rounded px-1.5 py-0.5 font-bold ${
-            armed ? "bg-emerald-500/25 text-emerald-300" : "bg-slate-700/60 text-slate-400"
+            armed ? "border border-red-400/50 bg-red-950/60 text-red-200" : "border border-white/10 bg-black/40 text-slate-400"
           }`}
         >
           {armed ? "ARM" : "DISARM"}
         </span>
-        <span className="max-w-[9rem] truncate text-cyan-100/90">{flightMode || "--"}</span>
+        <span className="max-w-[9rem] truncate text-slate-200">{flightMode || "--"}</span>
       </div>
     </div>
   );
@@ -264,7 +264,7 @@ function RollArc({ cx, cy, radius }: { cx: number; cy: number; radius: number })
             y1={y1}
             x2={x2}
             y2={y2}
-            stroke={major ? "#22d3ee" : "rgba(34,211,238,0.45)"}
+            stroke={major ? "#78aa8d" : "rgba(120,170,141,0.45)"}
             strokeWidth={major ? 1.5 : 1}
           />
         );
@@ -310,10 +310,10 @@ function HeadingTape({
         fill="rgba(2,6,23,0.78)"
         stroke="rgba(34,211,238,0.25)"
       />
-      <line x1={cx} y1={0} x2={cx} y2={tapeHeight} stroke="#22d3ee" strokeWidth={1.5} />
+      <line x1={cx} y1={0} x2={cx} y2={tapeHeight} stroke="#78aa8d" strokeWidth={1.5} />
       <polygon
         points={`${cx},${tapeHeight + 4} ${cx - 5},${tapeHeight} ${cx + 5},${tapeHeight}`}
-        fill="#22d3ee"
+        fill="#78aa8d"
       />
       {hasHeading ? (
         marks.map(({ deg, major }) => {
@@ -362,10 +362,10 @@ function ClimbBar({ fill, height, width }: { fill: number | null; height: number
 
   return (
     <div className="flex flex-col items-center" style={{ width }}>
-      <div className="text-[8px] uppercase tracking-[0.14em] text-cyan-300/70">VS</div>
+      <div className="text-[8px] uppercase tracking-[0.14em] text-slate-500">VS</div>
       <div
         className={`relative mt-1 overflow-hidden rounded-sm border ${
-          unavailable ? "border-slate-600 bg-slate-800/80" : "border-cyan-500/30 bg-slate-900/80"
+          unavailable ? "border-slate-600 bg-slate-800/80" : "border-emerald-500/30 bg-slate-900/80"
         }`}
         style={{ width, height }}
       >

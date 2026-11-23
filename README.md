@@ -32,7 +32,7 @@ The **Hosted Web App** (internal runtime key `cloud`) is a pure browser SPA that
 | Static SPA over HTTPS | Accounts or login |
 | Web Serial CRSF + MAVLink link (user-granted port only) | Server-side telemetry persistence |
 | Replay and simulation (frontend-only, no upload) | Fleet or project management |
-| Same dashboard UI as desktop/browser dev | Cloud logging or sync |
+| **Download session** — buffer live telemetry in memory; export replay JSONL locally (no upload) | Cloud logging or sync |
 | | Billing or paid tiers |
 
 Self-host the Hosted Web App with `pnpm build:cloud` and serve **`apps/web/dist` from that command only** — not the output of `pnpm build` (desktop/Node stack). A wrong artifact shows the COM port dropdown and spams `WebSocket connection to …/ws failed` because the app is in `web` mode instead of `cloud`. Do not embed the app in a cross-origin iframe without a `Permissions-Policy` that allows `serial` for your origin — Web Serial is blocked by default in embedded contexts.
@@ -54,6 +54,7 @@ Prefer bench testing and disconnected telemetry validation before using the soft
 
 ## Features
 
+- **Map-first operator console** — compact source/link command bar, avionics-style telemetry strip, contextual payload panel, and expandable bottom diagnostics; nominal state remains visually quiet while stale, warning, armed, and non-live states stay explicit
 - **Live map** with flight track (up to 5000 points), home reference, distance, **heading-aligned drone chevron** (falls back to a circle when heading is unknown), bottom-center **Attitude HUD** (pitch ladder, roll arc, heading tape, speed/altitude, climb bar, armed/mode; dims with a **Stale** banner when live telemetry is older than 3 s), **map navigation toolbar** (Follow with heading-up/north-up, Recenter, Fit track; preferences in `uav-gcs.map.follow` / `uav-gcs.map.headingUp`), and in-app **basemap switcher** (Tactical / Satellite / Topo; persisted in `localStorage` as `uav-gcs.map.basemap`)
 - **Telemetry sidebar** — **Text** or **Inst** (mini gauges with the same telemetry fields as text mode); drag card headers (⠿) to reorder (shared order for both views, stored in `uav-gcs.sidebar.order`); **Reset** restores recommended flight-priority order; alerts stay fixed at the top
 - **Serial link** — port picker (USB/PNP preferred), manual path entry, common baud rates
@@ -61,7 +62,7 @@ Prefer bench testing and disconnected telemetry validation before using the soft
 - **Optional video stream** (MJPEG, etc.) via environment variables; crosshair overlay; when the stream is live, a **Ground Target** panel docks beside the camera feed
 - **Ground target estimation** (desktop) — image-center target with GeoTIFF DEM ray marching, map marker, line-of-sight, and sample-log export (shown next to the camera when video is live)
 - **Preflight health advisory** — sensor and link health checks with configurable thresholds
-- **Session logging** and reset for new flights
+- **Session logging** — desktop and browser dev write JSONL to disk via **Start Log**; the **Hosted Web App** and browser dev also buffer telemetry in memory and export with **Download session** (replay-compatible JSONL, never uploaded). **Reset** clears the in-memory buffer.
 - **Onboarding tour** — first-run walkthrough of link controls, telemetry sidebar, map, camera, and activity log; skip anytime; restart from the **?** button in the top bar (`localStorage` keys `uav-gcs.onboarding.*`)
 - **Replay & Simulation** — frontend-only, read-only telemetry sources that drive the same dashboard without hardware: replay recorded `.jsonl`/`.json` logs (start/pause/seek/step, speed and timing modes) or run deterministic seeded simulations. See [`docs/replay-mode.md`](docs/replay-mode.md) and [`docs/adr/0003-frontend-only-replay-simulation.md`](docs/adr/0003-frontend-only-replay-simulation.md)
 - **Flight Review** — post-flight analysis over a loaded replay log (not simulation): summary stats, findings, colored path, seekable timeline with markers, and five click-to-seek graphs. Open manually from replay controls while in **Replay** mode; shares the replay clock with dashboard scrubbing. Frontend-only — nothing is uploaded. See [`docs/adr/0007-flight-review-replay-analysis-view.md`](docs/adr/0007-flight-review-replay-analysis-view.md)
@@ -284,7 +285,7 @@ On the **desktop** link, gimbal attitude for estimation comes from MAVLink **285
 | `VITE_MAP_STYLE_URL` | Optional: full MapLibre style URL (hides the in-app basemap switcher) |
 | `VITE_SATELLITE_TILE_URL` | Optional: custom raster tile URL for the **Satellite** preset (default: Esri World Imagery) |
 | `VITE_VIDEO_URL` / `VITE_VIDEO_KIND` | Optional: camera stream (e.g. MJPEG). Compact attitude HUD on the feed is toggled with **HUD** in the camera header (`uav-gcs.video.hud`). |
-| `VITE_ENABLE_SPLASH_SCREEN` | Startup HUD splash overlay (default: enabled; set `false` to skip) |
+| `VITE_ENABLE_SPLASH_SCREEN` | Optional startup overlay (default: disabled; set `true` to enable) |
 
 Server: `PORT` (default `3001`), `HOST` (default `127.0.0.1`) in `apps/server`. The server exposes **unauthenticated** serial-control endpoints; it binds loopback only. Setting `HOST` to a routable address (e.g. `0.0.0.0`) is a deliberate opt-in that lets any device on the network open or close the link to flight hardware — see [`docs/adr/0002-server-loopback-only.md`](docs/adr/0002-server-loopback-only.md). On startup the server prints a prominent `console.warn` when bound beyond loopback; the browser stack shows a matching top banner when `VITE_API_BASE_URL` or `VITE_WS_URL` targets a non-loopback host. State-changing routes (`POST /api/connect`, `/api/disconnect`, `/api/reset`, logging start/stop) reject browser requests whose `Origin` is not the local Vite dev UI (`http://localhost:5173` or `http://127.0.0.1:5173`); non-browser clients that omit `Origin` are unchanged. `POST /api/connect` validates serial `path` against plausible device patterns only (Windows `COM*`, macOS `/dev/cu.*`/`/dev/tty.*`, Linux `tty*`, `/dev/serial/by-id|by-path/*`, `/dev/rfcomm*`) and `baudRate` (57600, 115200, 420000, 460800) before opening the port; malformed requests return HTTP 400. CI runs `cargo audit` on the desktop crate (`pnpm audit:desktop`).
 

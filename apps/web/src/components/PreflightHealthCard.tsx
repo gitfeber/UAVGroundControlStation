@@ -12,20 +12,18 @@ const STATUS_LABEL: Record<PreflightStatus, string> = {
   UNKNOWN: "Unknown"
 };
 
-/** Big global-badge styling per status (emerald / amber / red / slate). */
 const BADGE_CLASS: Record<PreflightStatus, string> = {
-  READY: "border-emerald-400/40 bg-emerald-400/10 text-emerald-200",
-  CAUTION: "border-amber-400/40 bg-amber-400/10 text-amber-100",
-  NOT_READY: "border-red-400/40 bg-red-400/10 text-red-200",
-  UNKNOWN: "border-slate-500/50 bg-slate-600/20 text-slate-300"
+  READY: "status-tag--good",
+  CAUTION: "status-tag--warn",
+  NOT_READY: "status-tag--bad",
+  UNKNOWN: ""
 };
 
-/** Per-row status dot color. */
 const DOT_CLASS: Record<PreflightStatus, string> = {
-  READY: "bg-emerald-400",
-  CAUTION: "bg-amber-400",
-  NOT_READY: "bg-red-400",
-  UNKNOWN: "bg-slate-500"
+  READY: "preflight-row__mark--good",
+  CAUTION: "preflight-row__mark--warn",
+  NOT_READY: "preflight-row__mark--bad",
+  UNKNOWN: ""
 };
 
 const TEXT_CLASS: Record<PreflightStatus, string> = {
@@ -38,31 +36,27 @@ const TEXT_CLASS: Record<PreflightStatus, string> = {
 export function PreflightHealthCard({ health }: PreflightHealthCardProps) {
   return (
     <Panel title="Preflight health">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <span
-          className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] ${BADGE_CLASS[health.status]}`}
-        >
+      <div className="preflight-summary">
+        <span className={`status-tag ${BADGE_CLASS[health.status]}`}>
           {STATUS_LABEL[health.status]}
         </span>
-        <span className="min-w-0 truncate text-right text-xs text-slate-300">{health.summary}</span>
+        <span className="min-w-0 truncate text-right text-[9px] text-slate-400">{health.summary}</span>
       </div>
 
-      <ul className="space-y-1">
+      <ul className="preflight-list">
         {health.checks.map((c) => (
-          <li key={c.id} className="flex items-center justify-between gap-2 text-[11px]">
-            <span className="flex min-w-0 items-center gap-2">
-              <span className={`h-2 w-2 shrink-0 rounded-full ${DOT_CLASS[c.status]}`} aria-hidden="true" />
-              <span className="truncate text-slate-400">{c.label}</span>
-            </span>
-            <span className={`shrink-0 truncate text-right font-mono ${TEXT_CLASS[c.status]}`} title={c.details ?? c.message}>
+          <li key={c.id} className="preflight-row">
+            <span className={`preflight-row__mark ${DOT_CLASS[c.status]}`} aria-hidden="true" />
+            <span className="truncate text-slate-500">{c.label}</span>
+            <span className={`preflight-row__value shrink-0 truncate text-right ${TEXT_CLASS[c.status]}`} title={c.details ?? c.message}>
               {c.message}
             </span>
           </li>
         ))}
       </ul>
 
-      <p className="mt-3 text-[10px] leading-snug text-slate-600">
-        Advisory only — derived from telemetry, not the flight controller&apos;s pre-arm.
+      <p className="mt-2 text-[8px] uppercase leading-snug tracking-[0.08em] text-slate-600">
+        Advisory only · not flight-controller pre-arm state
       </p>
     </Panel>
   );

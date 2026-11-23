@@ -7,7 +7,6 @@ import type {
 } from "@uav-ground-control-station/shared";
 import { appVersionLabel } from "../lib/appVersion";
 import type { LinkIssue } from "../lib/linkErrors";
-import { Badge } from "./Panel";
 import type { ActiveView } from "../flightReview";
 
 const baudRates = [57600, 115200, 420000, 460800];
@@ -34,6 +33,9 @@ interface TopbarProps {
   onReset: () => Promise<void>;
   onStartLogging: () => Promise<void>;
   onStopLogging: () => Promise<void>;
+  onDownloadSession?: () => void;
+  sessionEventCount?: number;
+  sessionExportEnabled?: boolean;
   onRestartTour: () => void;
   linkIssues?: LinkIssue[];
 }
@@ -59,6 +61,9 @@ export function Topbar({
   onReset,
   onStartLogging,
   onStopLogging,
+  onDownloadSession,
+  sessionEventCount = 0,
+  sessionExportEnabled = false,
   onRestartTour,
   linkIssues = []
 }: TopbarProps) {
@@ -68,6 +73,7 @@ export function Topbar({
   // Cloud defaults to TX16S CRSF (420000); 115200/460800 are for direct FC MAVLink USB.
   const [baudRate, setBaudRate] = useState(420000);
   const [busy, setBusy] = useState(false);
+  const [controlsOpen, setControlsOpen] = useState(false);
 
   useEffect(() => {
     if (!selectedPath && ports.length > 0 && ports[0]) {
@@ -102,188 +108,172 @@ export function Topbar({
   }
 
   return (
-    <header
-      data-tour="topbar"
-      className="relative z-20 shrink-0 border-b border-cyan-300/10 bg-slate-950/92 px-3 py-2 shadow-glow backdrop-blur sm:px-4"
-    >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <div className="min-w-0 shrink">
-          <div className="flex min-w-0 items-baseline gap-2">
-            <div className="truncate text-[10px] uppercase tracking-[0.28em] text-cyan-300/80 sm:text-[11px] sm:tracking-[0.32em]">
-              {isCloud ? "Hosted Web App" : "Local GCS"}
-            </div>
-            <span className="shrink-0 font-mono text-[10px] font-medium text-cyan-300/55 sm:text-[11px]">
-              {appVersionLabel()}
-            </span>
+    <header data-tour="topbar" className="operator-topbar">
+      <div className="operator-topbar__main">
+        <div className="operator-topbar__identity">
+          <div className="operator-topbar__eyebrow">
+            {isCloud ? "Hosted Web App" : runtimeMode === "desktop" ? "Native operator station" : "Local development runtime"}
+            <span className="ml-2 font-mono tracking-normal">{appVersionLabel()}</span>
           </div>
-          <h1 className="truncate text-base font-semibold tracking-wide text-slate-50 sm:text-lg">
-            {isFlightReview ? (
-              "Flight Review"
-            ) : (
-              <>
-                <span className="xl:hidden">UAV GCS</span>
-                <span className="hidden xl:inline">UAV Ground Control Station</span>
-              </>
-            )}
+          <h1 className="operator-topbar__title">
+            {isFlightReview ? "Flight Review" : "UAV Ground Control Station"}
           </h1>
-          {isFlightReview && replayFileName && (
-            <p className="mt-0.5 truncate font-mono text-[11px] text-amber-200/90" title={replayFileName}>
-              {replayFileName}
-            </p>
-          )}
-          {isCloud && (
-            <p
-              className="mt-0.5 cursor-help truncate text-[10px] font-medium text-emerald-300/90 sm:text-[11px]"
-              title="Only the USB device you select via the browser picker is accessed. GPS and flight data never leave your browser."
-            >
-              <span className="mr-1 inline-flex align-middle text-emerald-200/90" aria-hidden="true">
-                <ShieldIcon />
-              </span>
-              Telemetry stays in your browser.
-            </p>
-          )}
         </div>
 
         {isFlightReview ? (
-          <div className="ml-auto flex items-center gap-2">
+          <div className="flex items-center gap-8">
             <SourceModeBadge mode="replay" />
-            <button type="button" className="btn-secondary whitespace-nowrap" onClick={onBackToDashboard}>
-              Back to dashboard
-            </button>
+            {replayFileName && (
+              <span className="max-w-64 truncate font-mono text-[9px] text-amber-200" title={replayFileName}>
+                {replayFileName}
+              </span>
+            )}
           </div>
         ) : (
-          <>
-        <SourceModeSwitch activeSourceMode={activeSourceMode} onSetSourceMode={onSetSourceMode} />
-
-        <div data-tour="serial-connect" className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          {isCloud ? (
-            <span className="min-w-0 flex-1 basis-[min(100%,18rem)] truncate text-xs text-slate-400 sm:text-sm">
-              Click Connect — your browser will prompt to pick the serial device.
-            </span>
-          ) : (
-            <>
-              <select
-                className="h-9 min-w-0 max-w-full flex-1 basis-[min(100%,14rem)] rounded-lg border border-cyan-300/20 bg-slate-900 px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/60 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[12rem] sm:max-w-md sm:px-3"
-                value={selectedPath}
-                disabled={liveControlsLocked}
-                onChange={(event) => setSelectedPath(event.target.value)}
-              >
-                <option value="">{ports.length === 0 ? "No serial ports visible" : "Select serial port"}</option>
-                {ports.map((port) => (
-                  <option key={port.path} value={port.path}>
-                    {serialPortLabel(port)}
-                  </option>
-                ))}
-                <option value={manualPortValue}>Manual path...</option>
-              </select>
-
-              {selectedPath === manualPortValue && (
-                <input
-                  className="h-9 min-w-0 max-w-full flex-1 basis-[min(100%,10rem)] rounded-lg border border-cyan-300/20 bg-slate-900 px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/60 disabled:cursor-not-allowed disabled:opacity-40 sm:max-w-[14rem] sm:px-3"
-                  value={manualPath}
-                  disabled={liveControlsLocked}
-                  onChange={(event) => setManualPath(event.target.value)}
-                  placeholder="COM3, /dev/cu.*"
-                />
-              )}
-            </>
-          )}
-
-          <select
-            className="h-9 shrink-0 rounded-lg border border-cyan-300/20 bg-slate-900 px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/60 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3"
-            value={baudRate}
-            disabled={liveControlsLocked}
-            onChange={(event) => setBaudRate(Number(event.target.value))}
-          >
-            {baudRates.map((rate) => (
-              <option key={rate} value={rate}>
-                {rate}
-              </option>
-            ))}
-          </select>
-
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {!isCloud && (
-              <button className="btn-secondary whitespace-nowrap" disabled={busy || liveControlsLocked} onClick={() => run(onRefreshPorts)}>
-                Refresh
-              </button>
-            )}
-
-            {status.serialConnected ? (
-              <button className="btn-danger whitespace-nowrap" disabled={busy || liveControlsLocked} onClick={() => run(onDisconnect)}>
-                Disconnect
-              </button>
-            ) : (
-              <button
-                className="btn-primary whitespace-nowrap"
-                disabled={busy || liveControlsLocked || (!isCloud && !connectPath)}
-                onClick={() => run(() => onConnect(isCloud ? "" : connectPath, baudRate))}
-              >
-                Connect
-              </button>
-            )}
-
-            <button className="btn-secondary whitespace-nowrap" disabled={busy || liveControlsLocked} onClick={() => run(onReset)}>
-              Reset
-            </button>
-
-            {!isCloud &&
-              (loggingStatus.active ? (
-                <button
-                  className="btn-secondary whitespace-nowrap border-yellow-300/30 text-yellow-100"
-                  disabled={busy || liveControlsLocked}
-                  onClick={() => run(onStopLogging)}
-                >
-                  Stop Log
-                </button>
-              ) : (
-                <button className="btn-secondary whitespace-nowrap" disabled={busy || liveControlsLocked} onClick={() => run(onStartLogging)}>
-                  Start Log
-                </button>
-              ))}
-          </div>
-        </div>
-
-        <div data-tour="link-status" className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:ml-auto">
-          <button
-            type="button"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-300/20 bg-slate-900 text-sm font-bold text-cyan-200/90 transition hover:border-cyan-300/50 hover:text-cyan-100"
-            title="Restart onboarding tour"
-            aria-label="Restart onboarding tour"
-            onClick={onRestartTour}
-          >
-            ?
-          </button>
-          <SourceModeBadge mode={activeSourceMode} />
-          <Badge tone={badgeTone}>{badgeText}</Badge>
-          <Badge tone={wsConnected ? "good" : "bad"}>{bridgeLabel}</Badge>
-          <Stat label="Raw" value={`${(status.rawBytes ?? 0).toLocaleString()}B`} />
-          <Stat label="Tx" value={`${(status.txBytes ?? 0).toLocaleString()}B`} />
-          <Stat label="Packets" value={packetCount.toLocaleString()} className="hidden lg:inline" />
-          <Stat label="Pkts" value={packetCount.toLocaleString()} className="lg:hidden" />
-          {(status.parserErrors ?? 0) > 0 && (
-            <Stat label="Err" value={String(status.parserErrors)} tone="warn" className="hidden md:inline" />
-          )}
-          <Stat label="Last" value={packetAge} />
-        </div>
-          </>
+          <SourceModeSwitch activeSourceMode={activeSourceMode} onSetSourceMode={onSetSourceMode} />
         )}
 
+        <div data-tour="link-status" className="operator-topbar__status">
+          <SourceModeBadge mode={activeSourceMode} />
+          <span className={`state-indicator state-indicator--${badgeTone}`}>{badgeText}</span>
+          <span className={`state-indicator state-indicator--${wsConnected ? "good" : "neutral"}`}>{bridgeLabel}</span>
+          <Stat label="Frames" value={packetCount.toLocaleString()} />
+          <Stat label="Age" value={packetAge} tone={telemetryLive ? "default" : "warn"} />
+          {(status.parserErrors ?? 0) > 0 && <Stat label="Err" value={String(status.parserErrors)} tone="warn" />}
+          <div className="operator-topbar__tools">
+            <button
+              type="button"
+              className="operator-button operator-button--square"
+              title="Restart onboarding tour"
+              aria-label="Restart onboarding tour"
+              onClick={onRestartTour}
+            >
+              ?
+            </button>
+            {isFlightReview ? (
+              <button type="button" className="operator-button" onClick={onBackToDashboard}>
+                Back to dashboard
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="operator-button"
+                  aria-expanded={controlsOpen}
+                  onClick={() => setControlsOpen((open) => !open)}
+                >
+                  Link setup
+                </button>
+                {status.serialConnected ? (
+                  <button className="btn-danger" disabled={busy || liveControlsLocked} onClick={() => run(onDisconnect)}>
+                    Disconnect
+                  </button>
+                ) : (
+                  <button
+                    className="btn-primary"
+                    disabled={busy || liveControlsLocked || (!isCloud && !connectPath)}
+                    onClick={() => run(() => onConnect(isCloud ? "" : connectPath, baudRate))}
+                  >
+                    Connect
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
-      {liveConnectedInBackground && (
-        <div className="mt-2 rounded-lg border border-emerald-400/30 bg-emerald-950/60 px-3 py-1.5 text-[11px] text-emerald-100">
-          Live connected in background — serial link stays open and untouched while {activeSourceMode === "simulation" ? "simulating" : "replaying"}.
+      {!isFlightReview && controlsOpen && (
+        <div data-tour="serial-connect" className="operator-topbar__drawer">
+          <div className="flex min-w-0 items-center gap-2">
+            {isCloud ? (
+              <span className="truncate text-[10px] text-slate-400">
+                Browser device picker opens on Connect. Telemetry stays in your browser.
+              </span>
+            ) : (
+              <>
+                <select
+                  className="operator-input min-w-48 flex-1"
+                  value={selectedPath}
+                  disabled={liveControlsLocked}
+                  onChange={(event) => setSelectedPath(event.target.value)}
+                >
+                  <option value="">{ports.length === 0 ? "No serial devices visible" : "Select telemetry link"}</option>
+                  {ports.map((port) => (
+                    <option key={port.path} value={port.path}>{serialPortLabel(port)}</option>
+                  ))}
+                  <option value={manualPortValue}>Manual path…</option>
+                </select>
+                {selectedPath === manualPortValue && (
+                  <input
+                    className="operator-input w-44"
+                    value={manualPath}
+                    disabled={liveControlsLocked}
+                    onChange={(event) => setManualPath(event.target.value)}
+                    placeholder="COM3, /dev/cu.*"
+                  />
+                )}
+              </>
+            )}
+            <select
+              className="operator-input w-24"
+              value={baudRate}
+              disabled={liveControlsLocked}
+              onChange={(event) => setBaudRate(Number(event.target.value))}
+            >
+              {baudRates.map((rate) => <option key={rate} value={rate}>{rate}</option>)}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1">
+            {!isCloud && (
+              <button className="operator-button" disabled={busy || liveControlsLocked} onClick={() => run(onRefreshPorts)}>
+                Scan
+              </button>
+            )}
+            <button className="operator-button" disabled={busy || liveControlsLocked} onClick={() => run(onReset)}>
+              Reset session
+            </button>
+            {!isCloud && (loggingStatus.active ? (
+              <button className="operator-button text-amber-200" disabled={busy || liveControlsLocked} onClick={() => run(onStopLogging)}>
+                Stop log
+              </button>
+            ) : (
+              <button className="operator-button" disabled={busy || liveControlsLocked} onClick={() => run(onStartLogging)}>
+                Start log
+              </button>
+            ))}
+            {sessionExportEnabled && (
+              <button
+                className="operator-button"
+                disabled={busy || sessionEventCount === 0}
+                title={sessionEventCount === 0 ? "No session telemetry buffered." : "Download replay JSONL locally."}
+                onClick={() => onDownloadSession?.()}
+              >
+                Export session
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-3">
+            <Stat label="RX" value={`${(status.rawBytes ?? 0).toLocaleString()} B`} />
+            <Stat label="TX" value={`${(status.txBytes ?? 0).toLocaleString()} B`} />
+            {isCloud && (
+              <span title="GPS and flight data never leave your browser." className="text-emerald-300">
+                <ShieldIcon />
+              </span>
+            )}
+          </div>
         </div>
       )}
 
-      {linkIssues.length > 0 && (
-        <div className="mt-2 space-y-2">
-          {linkIssues.map((issue) => (
-            <LinkIssueBanner key={issue.id} issue={issue} />
-          ))}
+      {liveConnectedInBackground && (
+        <div className="operator-notice border-emerald-400/30 bg-emerald-950/30 text-emerald-200">
+          Live telemetry link remains connected in the background. {activeSourceMode === "simulation" ? "Simulation" : "Replay"} is read-only.
         </div>
       )}
+
+      {linkIssues.map((issue) => <LinkIssueBanner key={issue.id} issue={issue} />)}
     </header>
   );
 }
@@ -291,13 +281,13 @@ export function Topbar({
 function LinkIssueBanner({ issue }: { issue: LinkIssue }) {
   const toneClass =
     issue.severity === "error"
-      ? "border-red-400/30 bg-red-950/90 text-red-100"
-      : "border-amber-400/35 bg-amber-950/80 text-amber-100";
+      ? "border-red-400/40 bg-red-950/30 text-red-200"
+      : "border-amber-400/40 bg-amber-950/25 text-amber-200";
 
   return (
-    <div className={`rounded-lg border px-3 py-2 text-xs shadow-glow ${toneClass}`}>
-      <div className="font-semibold uppercase tracking-[0.12em]">{issue.title}</div>
-      <div className="mt-1 leading-snug">{issue.message}</div>
+    <div className={`operator-notice flex items-center justify-center gap-3 normal-case tracking-normal ${toneClass}`}>
+      <strong className="uppercase tracking-[0.12em]">{issue.title}</strong>
+      <span>{issue.message}</span>
     </div>
   );
 }
@@ -316,17 +306,15 @@ function SourceModeSwitch({
   onSetSourceMode: (mode: TelemetrySourceMode) => void;
 }) {
   return (
-    <div data-tour="source-mode" className="inline-flex shrink-0 overflow-hidden rounded-lg border border-cyan-300/20 bg-slate-900">
+    <div data-tour="source-mode" className="source-mode-switch">
       {sourceModes.map(({ mode, label }) => {
         const active = mode === activeSourceMode;
         return (
           <button
             key={mode}
             type="button"
+            data-mode={mode}
             aria-pressed={active}
-            className={`h-9 whitespace-nowrap px-3 text-xs font-semibold tracking-wide transition-colors ${
-              active ? sourceModeActiveClass(mode) : "text-slate-400 hover:text-slate-200"
-            }`}
             onClick={() => onSetSourceMode(mode)}
           >
             {label}
@@ -337,24 +325,14 @@ function SourceModeSwitch({
   );
 }
 
-function sourceModeActiveClass(mode: TelemetrySourceMode): string {
-  if (mode === "replay") return "bg-amber-400/20 text-amber-200";
-  if (mode === "simulation") return "bg-purple-400/20 text-purple-200";
-  return "bg-emerald-400/20 text-emerald-200";
-}
-
 function SourceModeBadge({ mode }: { mode: TelemetrySourceMode }) {
   const config = {
-    live: { label: "LIVE", className: "border-emerald-400/40 bg-emerald-400/10 text-emerald-200" },
-    replay: { label: "REPLAY", className: "border-amber-400/40 bg-amber-400/10 text-amber-200" },
-    simulation: { label: "SIMULATION", className: "border-purple-400/40 bg-purple-400/10 text-purple-200" }
+    live: { label: "LIVE", className: "state-indicator--good" },
+    replay: { label: "REPLAY", className: "state-indicator--warn" },
+    simulation: { label: "SIM", className: "text-slate-300" }
   }[mode];
 
-  return (
-    <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] ${config.className}`}>
-      {config.label}
-    </span>
-  );
+  return <span className={`state-indicator ${config.className}`}>{config.label}</span>;
 }
 
 function Stat({
@@ -368,11 +346,11 @@ function Stat({
   tone?: "default" | "warn";
   className?: string;
 }) {
-  const valueClass = tone === "warn" ? "text-yellow-200" : "text-slate-200";
+  const valueClass = tone === "warn" ? "text-amber-200" : "";
   return (
-    <span className={`whitespace-nowrap font-mono text-[11px] text-slate-500 sm:text-xs ${className}`}>
-      <span className="text-slate-500">{label} </span>
-      <span className={valueClass}>{value}</span>
+    <span className={`status-readout ${className}`}>
+      <span className="status-readout__label">{label}</span>
+      <span className={`status-readout__value ${valueClass}`}>{value}</span>
     </span>
   );
 }

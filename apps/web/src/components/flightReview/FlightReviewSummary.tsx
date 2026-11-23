@@ -11,7 +11,7 @@ function formatDuration(ms: number): string {
 
 export function FlightReviewSummaryCards({ summary }: { summary: Summary }) {
   return (
-    <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
+    <div className="review-summary-strip grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8">
       <Metric label="Duration" value={formatDuration(summary.durationMs)} />
       <Metric label="Samples" value={String(summary.telemetrySampleCount)} />
       <Metric label="Max alt" value={formatNumber(summary.maxAltitudeM, 1, " m")} />

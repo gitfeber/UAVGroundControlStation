@@ -129,7 +129,7 @@ export function FlightReviewMapPanel({ path, sessionHome, currentPosition }: Fli
       className="flex min-h-0 flex-1 flex-col"
       action={
         <select
-          className="h-7 rounded border border-cyan-300/20 bg-slate-900 px-2 text-[10px] uppercase tracking-wider text-slate-200"
+          className="input-dark h-7 uppercase tracking-wider"
           value={colorMode}
           onChange={(event) => setColorMode(event.target.value as PathColoringMode)}
         >
@@ -141,7 +141,7 @@ export function FlightReviewMapPanel({ path, sessionHome, currentPosition }: Fli
         </select>
       }
     >
-      <div ref={containerRef} className="min-h-[16rem] flex-1 rounded-lg bg-slate-950" />
+      <div ref={containerRef} className="min-h-[16rem] flex-1 bg-[#080b0d]" />
     </Panel>
   );
 }
@@ -213,7 +213,7 @@ function addSources(map: MapInstance): void {
       source: "review-drone",
       paint: {
         "circle-radius": 9,
-        "circle-color": "#22d3ee",
+        "circle-color": "#78aa8d",
         "circle-stroke-width": 2,
         "circle-stroke-color": "#0f172a"
       }

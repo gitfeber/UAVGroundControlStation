@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { ConnectRequest, TelemetryState, TelemetrySourceMode } from "@uav-ground-control-station/shared";
 import type { LinkConnection } from "../lib/linkErrors";
+import type { SessionRecorderSnapshot } from "../lib/sessionRecorder";
 import { useTelemetry, type ActivityLogEntry } from "./useTelemetry";
 import { useReplayController, type ReplayController } from "./useReplayController";
 
@@ -29,6 +30,8 @@ export interface TelemetrySource {
   linkConnection: LinkConnection | null;
   wsConnected: boolean;
   runtimeMode: "web" | "desktop" | "cloud";
+  browserSessionExportEnabled: boolean;
+  sessionSnapshot: SessionRecorderSnapshot;
   refreshPorts: () => Promise<void>;
   connect: (request: ConnectRequest) => Promise<void>;
   disconnect: () => Promise<void>;
@@ -36,6 +39,7 @@ export interface TelemetrySource {
   startLogging: () => Promise<void>;
   stopLogging: () => Promise<void>;
   clearLogs: () => void;
+  downloadSession: () => void;
 
   // Source-mode surface.
   activeSourceMode: TelemetrySourceMode;
@@ -124,6 +128,8 @@ export function useTelemetrySource(): TelemetrySource {
       linkConnection: live.linkConnection,
       wsConnected: live.wsConnected,
       runtimeMode: live.runtimeMode,
+      browserSessionExportEnabled: live.browserSessionExportEnabled,
+      sessionSnapshot: live.sessionSnapshot,
       refreshPorts,
       connect,
       disconnect,
@@ -131,6 +137,7 @@ export function useTelemetrySource(): TelemetrySource {
       startLogging,
       stopLogging,
       clearLogs,
+      downloadSession: live.downloadSession,
       activeSourceMode,
       setSourceMode,
       liveControlsLocked,
@@ -146,6 +153,9 @@ export function useTelemetrySource(): TelemetrySource {
       live.linkConnection,
       live.wsConnected,
       live.runtimeMode,
+      live.browserSessionExportEnabled,
+      live.sessionSnapshot,
+      live.downloadSession,
       logs,
       refreshPorts,
       connect,

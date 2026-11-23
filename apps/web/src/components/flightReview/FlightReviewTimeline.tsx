@@ -47,7 +47,7 @@ export function FlightReviewTimeline({
           </span>
         </div>
 
-        <div className="relative h-10 rounded-lg border border-white/10 bg-black/30">
+        <div className="relative h-7 border border-white/10 bg-black/30">
           {markers.map((marker) => {
             const left = `${(marker.timeMs / maxMs) * 100}%`;
             return (
@@ -55,10 +55,10 @@ export function FlightReviewTimeline({
                 key={marker.id}
                 type="button"
                 title={`${marker.title} @ ${formatClock(marker.timeMs)}`}
-                className={`absolute top-1/2 z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border ${
+                className={`absolute top-1/2 z-10 h-2 w-2 -translate-x-1/2 -translate-y-1/2 border ${
                   marker.severity === "warn"
                     ? "border-yellow-200 bg-yellow-400/80"
-                    : "border-cyan-200 bg-cyan-400/80"
+                    : "border-emerald-200 bg-emerald-400/80"
                 }`}
                 style={{ left }}
                 onClick={() => replay.seek(marker.timeMs)}
@@ -78,7 +78,7 @@ export function FlightReviewTimeline({
           step={1}
           value={Math.min(currentTimeMs, maxMs)}
           onChange={(event) => replay.seek(Number(event.target.value))}
-          className="w-full accent-cyan-400"
+          className="w-full accent-emerald-500"
         />
       </div>
     </Panel>
