@@ -36,6 +36,9 @@ interface TopbarProps {
   onDownloadSession?: () => void;
   sessionEventCount?: number;
   sessionExportEnabled?: boolean;
+  canOpenLogInReplay?: boolean;
+  logReplayHandoffError?: string | null;
+  onOpenLogInReplay?: () => Promise<void>;
   onRestartTour: () => void;
   linkIssues?: LinkIssue[];
 }
@@ -64,6 +67,9 @@ export function Topbar({
   onDownloadSession,
   sessionEventCount = 0,
   sessionExportEnabled = false,
+  canOpenLogInReplay = false,
+  logReplayHandoffError = null,
+  onOpenLogInReplay,
   onRestartTour,
   linkIssues = []
 }: TopbarProps) {
@@ -274,6 +280,31 @@ export function Topbar({
       )}
 
       {linkIssues.map((issue) => <LinkIssueBanner key={issue.id} issue={issue} />)}
+
+      {activeSourceMode === "live" && canOpenLogInReplay && onOpenLogInReplay && (
+        <div className="operator-notice border-amber-400/30 bg-amber-950/30 text-amber-100">
+          <div className="leading-snug">
+            {loggingStatus.filePath && !loggingStatus.active
+              ? "Session log saved to disk."
+              : "Session buffer is ready for replay."}{" "}
+            Open it in Replay to scrub the flight without re-importing a file. Flight Review stays manual.
+          </div>
+          <button
+            type="button"
+            className="operator-button shrink-0 whitespace-nowrap"
+            disabled={busy}
+            onClick={() => run(onOpenLogInReplay)}
+          >
+            Open in Replay
+          </button>
+        </div>
+      )}
+
+      {logReplayHandoffError && (
+        <div className="operator-notice border-red-400/30 bg-red-950/30 text-red-100">
+          {logReplayHandoffError}
+        </div>
+      )}
     </header>
   );
 }

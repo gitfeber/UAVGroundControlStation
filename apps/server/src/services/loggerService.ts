@@ -1,4 +1,5 @@
-import { createWriteStream, existsSync, mkdirSync, type WriteStream } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, readFileSync, type WriteStream } from "node:fs";
+import { basename } from "node:path";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { REPLAY_LOG_SCHEMA_VERSION, type LoggingStatus, type TelemetryState } from "@uav-ground-control-station/shared";
@@ -29,8 +30,18 @@ export class LoggerService {
   stop(): LoggingStatus {
     this.stream?.end();
     this.stream = null;
-    this.filePath = null;
     return this.status();
+  }
+
+  readStoppedLog(): { text: string; fileName: string } {
+    if (!this.filePath) {
+      throw new Error("No session log file available.");
+    }
+
+    return {
+      text: readFileSync(this.filePath, "utf8"),
+      fileName: basename(this.filePath)
+    };
   }
 
   status(): LoggingStatus {
